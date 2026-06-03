@@ -1,0 +1,20 @@
+# CMake build directory
+build/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+
+# Compiled Object files and Executables
+*.o
+*.out
+*.exe
+*.dylib
+run_engine
+
+# macOS system files
+.DS_Store
+
+# IDE folders (Uncomment if you use them)
+.vscode/
+# .idea/
