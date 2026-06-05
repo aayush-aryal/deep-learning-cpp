@@ -1,6 +1,7 @@
 #include "Tensor.h"
 #include <iostream>
 #include <stdexcept>
+#include <random>
 
 Tensor::Tensor(std::vector<int> shape){
     shape_=shape;
@@ -11,6 +12,7 @@ Tensor::Tensor(std::vector<int> shape){
     cols_= shape_[1];
 
     data_.resize(rows_*cols_,0.0f);
+    // i want to change initialize to have random values upon initialization?
 }
 
 void Tensor::set(int r, int c, float value){
@@ -55,9 +57,10 @@ Tensor Tensor::add(const Tensor& other)const{
 };
 
 std::ostream& operator<<(std::ostream& os,const Tensor& t){
+    // overload << so it knows how to print tensors
     os<< "Shape ("<<t.shape_[0]<< "x"<< t.shape_[1]<< ")"<<std::endl;
-    int rows=t.shape_[0];
-    int cols=t.shape_[1];
+    int rows=t.rows_;
+    int cols=t.cols_;
     for (int i=0;i<rows;i++){
         os<<"[";
         for (int j=0; j<cols;j++){
@@ -69,4 +72,41 @@ std::ostream& operator<<(std::ostream& os,const Tensor& t){
         os<<"]"<<std::endl;
     }
     return os;
+}
+
+void Tensor::randomize(){
+    // use random library instead of rand because it cannot give enough random values for large NNs
+    // std::default_random_engine generator;
+    // std::uniform_real_distribution<float> distribution(-1.0,1.0);
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
+    int total=rows_*cols_;
+    for (int i=0; i<total;i++){
+        data_[i]=distribution(generator);
+    }
+}
+
+Tensor Tensor::matmul(const Tensor& other) const{
+    // matrix a can be multiplied with matrix b if
+    // column of matrix A must be equal to row of Matrix B
+    if (this->cols_!=other.rows_){
+        throw std::runtime_error("Cannot multiply matrices because dimension mismatch");
+    }
+
+    // resulting matrix will be (Rows of A, Columns of B)
+
+    std::vector<int>result_shape={this->rows_,other.cols_};
+    Tensor result_tensor=Tensor(result_shape);
+    for (int r=0; r<this->rows_; r++){
+        for(int c=0; c<other.cols_;c++){
+            float dotProduct=0.0f;
+            for (int k=0;k<this->cols_;k++){
+                dotProduct+=(*this)(r,k)*other(k,c);
+            }
+            result_tensor.set(r,c,dotProduct);   
+        }
+    }
+    return result_tensor;
 }

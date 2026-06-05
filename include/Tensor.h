@@ -13,6 +13,9 @@ class Tensor{
     float operator()(int r, int c) const;
     Tensor add(const Tensor& other)const;
     friend std::ostream& operator<< (std::ostream& os,const Tensor& t);
+    void randomize();
+    Tensor matmul(const Tensor& a) const;
+
 
     private:
     std::vector<float> data_;
