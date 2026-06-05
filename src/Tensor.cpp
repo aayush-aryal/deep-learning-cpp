@@ -38,23 +38,32 @@ float Tensor::operator()(int r, int c) const{
 }
 
 Tensor Tensor::add(const Tensor& other)const{
-    // matrix must have equal rows and columns to be added
-    int rows= other.shape_[0];
-    int cols= other.shape_[1];
+    // matrix must have equal rows and columns to be added or equal col and one must be 1xC
 
-    if (rows_!=rows || cols_!= cols){
-        // throw an exception
-        throw std::runtime_error("Cannot add two Tensors with different dimensions.");
-    };
-
-    Tensor result(shape_);
-    int total_elements=rows_*cols_;
-    for (int i=0;i<total_elements;i++){
-        int sum=data_[i]+other.data_[i];
-        result.data_[i]=sum;
-    };
-     return result;
-};
+    // special case for add is broadcasting
+    // if 32*64 matrix is added to 1*64 it should be broadcasted to every row
+    if (other.rows_==1 && this->cols_==other.cols_){
+        // broadcast
+        Tensor result(this->shape_);
+        for (int r=0; r<this->rows_;r++){
+            for (int c=0; c<other.cols_;c++){
+                float sum=(*this).get(r,c)+other.get(0,c);
+                result.set(r,c,sum);
+            }
+        }
+        return result;
+    }
+    if (this->rows_==other.rows_ && this->cols_==other.cols_){
+            Tensor result(shape_);
+            int total_elements=rows_*cols_;
+            for (int i=0;i<total_elements;i++){
+                float sum=data_[i]+other.data_[i];
+                result.data_[i]=sum;
+            };
+        return result;
+    }
+    throw std::runtime_error("Cannot add: dimensions mismatch and not broadcastable.");
+}
 
 std::ostream& operator<<(std::ostream& os,const Tensor& t){
     // overload << so it knows how to print tensors

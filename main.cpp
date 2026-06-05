@@ -22,5 +22,12 @@ int main(){
     std::cout<<t1<<std::endl;
     std::cout<<t3<<std::endl;
     std::cout<<t3.matmul(t1);
+
+    std::cout<<"--------------Broadcasting-------------"<<std::endl;
+    Tensor t4(std::vector<int>{1,3});
+    t4.randomize();
+    std::cout<<t4;
+    std::cout<<t1;
+    std::cout<<t1.add(t4);
     return 0;
 }
