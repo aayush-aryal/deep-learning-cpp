@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "autograd/ops/AddBackward.hpp"
+#include "autograd/ops/MatmulBackward.hpp"
 
 
 Tensor::Tensor(std::vector<size_t> shape){
@@ -133,6 +134,8 @@ Tensor Tensor::matmul(const Tensor& other) const{
             result_tensor.set(r,c,dotProduct);   
         }
     }
+    auto node=std::make_shared<MatmulBackward>(std::make_shared<Tensor>(*this), std::make_shared<Tensor>(other),result_tensor.grad_);
+    result_tensor.grad_fn_=node;
     return result_tensor;
 }
 
@@ -206,3 +209,51 @@ void Tensor::backward(){
     }
     
 }
+
+
+// void Tensor::backward(){
+
+//     if (!this->grad_fn_){return;}
+//     std::unordered_set<BackwardNode*>visited;
+//     std::unordered_map<BackwardNode*,int> dependencies;
+//     std::queue<BackwardNode*> queueP;
+
+//     // since it has a history add it to the queue 
+//     queueP.push(this->grad_fn_.get());
+//     while(!queueP.empty()){
+//         BackwardNode* curr=queueP.front();
+//         queueP.pop();
+//         // loop through its parents
+//         for(std::shared_ptr<Tensor>parent:curr->get_parents()){
+//             BackwardNode* parent_node= parent->grad_fn_.get();
+//             dependencies[parent_node]++;
+//             if (visited.find(parent_node)==visited.end()){
+//                 visited.insert(parent_node);
+//                 queueP.push(parent_node);
+//             }
+//         }
+//     }
+//     std::queue<BackwardNode*> executionOrd;
+//     std::vector<BackwardNode*> executionList;
+
+//     executionOrd.push(this->grad_fn_.get());
+//     while (!executionOrd.empty()){
+//         BackwardNode* curr= executionOrd.front();
+//         executionOrd.pop();
+
+//         executionList.push_back(curr);
+//         for( std::shared_ptr<Tensor>parent:curr->get_parents()){
+//             BackwardNode* parent_node=parent->grad_fn_.get();
+//             dependencies[parent_node]--;
+//             if (dependencies[parent_node]==0){
+//                 executionOrd.push(parent_node);
+//             }
+//         }
+//     }
+//     for (BackwardNode* node:executionList){
+//         std::shared_ptr<std::vector<float>> incoming_grad=node->get_gradient();
+//         node->apply(*incoming_grad);
+//     }
+
+
+// }

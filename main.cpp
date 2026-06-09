@@ -49,5 +49,41 @@ int main(){
     for (float g : gradB) std::cout << g << " ";
     std::cout << "\n";
 
+    std::cout<<"--------------Multiplication-------------"<<std::endl;
+    Tensor t5(std::vector<size_t>{3,2});
+    t5.randomize();
+    Tensor t6(std::vector<size_t>{2,5});
+    t6.randomize();
+
+    Tensor t7=t5.matmul(t6);
+    t7.randomize();
+
+    t7.backward();
+    {
+            std::cout<<t7;
+            std::cout << "Gradient T7: ";
+            for (float g : t7.get_grad()) std::cout << g << " ";
+            std::cout << "\n";
+    }
+
+    {
+            std::cout<<t5;
+            std::cout << "Gradient T5: ";
+            for (float g : t5.get_grad()) std::cout << g << " ";
+            std::cout << "\n";
+    }
+
+    {
+            std::cout<<t6;
+            std::cout << "Gradient T6: ";
+            for (float g : t6.get_grad()) std::cout << g << " ";
+            std::cout << "\n";
+
+    }
+
+
+
     return 0;
 }
+
+

@@ -9,4 +9,5 @@ add_executable(run_engine
                 main.cpp 
                 src/Tensor.cpp
                 src/autograd/ops/AddBackward.cpp
+                src/autograd/ops/MatmulBackward.cpp
                 )

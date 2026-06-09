@@ -28,6 +28,14 @@ class Tensor{
         return data_.size();
     };
 
+    std::vector<size_t> get_shape(){
+        return shape_;
+    }
+
+    const std::vector<float>& get_data()const{
+        return data_;
+    }
+    
     void backward();
 
 
