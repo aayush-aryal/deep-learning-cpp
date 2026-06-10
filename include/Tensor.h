@@ -5,7 +5,7 @@
 #include <memory>
 #include "autograd/BackwardNode.hpp"
 
-class Tensor{
+class Tensor:public std::enable_shared_from_this<Tensor>{
     public:
     // constructor 
     Tensor(std::vector<size_t>shape);
@@ -17,10 +17,10 @@ class Tensor{
     friend std::ostream& operator<< (std::ostream& os,const Tensor& t);
     void randomize();
     Tensor matmul(const Tensor& a) const;
-    void relu();
+    Tensor relu();
     void zero_grad();
 
-    std::vector<float>&get_grad(){
+    std::vector<float>&get_grad()const{
         return *grad_;
     };
     std::shared_ptr<BackwardNode> grad_fn_;
@@ -28,12 +28,20 @@ class Tensor{
         return data_.size();
     };
 
-    std::vector<size_t> get_shape(){
+    std::vector<size_t> get_shape()const{
         return shape_;
     }
 
     const std::vector<float>& get_data()const{
         return data_;
+    }
+
+    void set_requires_grad(bool val){
+        requires_grad_=val;
+    }
+
+    bool get_requires_grad()const{
+        return requires_grad_;
     }
     
     void backward();

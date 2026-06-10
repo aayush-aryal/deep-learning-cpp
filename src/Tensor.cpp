@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include "autograd/ops/AddBackward.hpp"
 #include "autograd/ops/MatmulBackward.hpp"
+#include "autograd/ops/ReluBackward.hpp"
 
 
 Tensor::Tensor(std::vector<size_t> shape){
@@ -64,8 +65,12 @@ Tensor Tensor::add(Tensor& other){
                 result.set(r,c,sum);
             }
         }
-        auto node=std::make_shared<AddBackward>(std::make_shared<Tensor>(*this), std::make_shared<Tensor>(other),result.grad_);
-        result.grad_fn_=node;
+        if (this->requires_grad_|| other.requires_grad_){
+            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other.shared_from_this(),result.grad_);
+            result.grad_fn_=node;
+            result.requires_grad_=true;
+        }
+        
         return result;
     }
     if (this->shape_[0]==other.shape_[0] && this->shape_[1]==other.shape_[1]){
@@ -75,8 +80,12 @@ Tensor Tensor::add(Tensor& other){
                 float sum=data_[i]+other.data_[i];
                 result.data_[i]=sum;
             };
-        auto node=std::make_shared<AddBackward>(std::make_shared<Tensor>(*this), std::make_shared<Tensor>(other),result.grad_);
-        result.grad_fn_=node;
+
+        if (this->requires_grad_|| other.requires_grad_){
+            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other.shared_from_this(),result.grad_);
+            result.grad_fn_=node;
+            result.requires_grad_=true;
+        }
         return result;
     }
     throw std::runtime_error("Cannot add: dimensions mismatch and not broadcastable.");
@@ -134,19 +143,36 @@ Tensor Tensor::matmul(const Tensor& other) const{
             result_tensor.set(r,c,dotProduct);   
         }
     }
-    auto node=std::make_shared<MatmulBackward>(std::make_shared<Tensor>(*this), std::make_shared<Tensor>(other),result_tensor.grad_);
-    result_tensor.grad_fn_=node;
+
+    if (this->requires_grad_|| other.requires_grad_){
+            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other.shared_from_this(),result_tensor.grad_);
+            result_tensor.grad_fn_=node;
+            result_tensor.requires_grad_=true;
+        }
+        
     return result_tensor;
 }
 
 
-void Tensor::relu(){
+// to work on probably a new tensor reference after relu that is created that has the output
+// add the shared backward node 
+Tensor Tensor::relu(){
+
     int max_data=this->data_.size();
-    for (int i=0;i<max_data;i++){
+    Tensor result_tensor=Tensor(this->shape_);
+    for (size_t i=0;i<max_data;i++){
         if (this->data_[i]<0){
-            this->data_[i]=0;
+            result_tensor.data_[i]=0;
+        }else{
+            result_tensor.data_[i]=data_[i];
         }
     }
+    if (this->requires_grad_){
+        auto node= std::make_shared<ReluBackward>(this->shared_from_this(),result_tensor.grad_);
+        result_tensor.grad_fn_=node;
+    }
+
+    return result_tensor;
 }
 
 
@@ -168,7 +194,7 @@ void Tensor::backward(){
     while (!queueP.empty()){
         BackwardNode* curr= queueP.front();
         queueP.pop();
-        for (std::shared_ptr<Tensor> parent: curr->get_parents()){
+        for (std::shared_ptr<const Tensor> parent: curr->get_parents()){
             if (parent->grad_fn_){
                 BackwardNode* parent_node=parent->grad_fn_.get();
                 dependencies[parent_node]++;
@@ -190,7 +216,7 @@ void Tensor::backward(){
         orderedExec.pop();
 
         executionList.push_back(curr);
-        for (std::shared_ptr<Tensor> parent:curr->get_parents()){
+        for (std::shared_ptr<const Tensor> parent:curr->get_parents()){
             if (parent->grad_fn_){
                 BackwardNode* parent_node=parent->grad_fn_.get();
                 dependencies[parent_node]--;
