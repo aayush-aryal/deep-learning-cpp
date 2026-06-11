@@ -8,6 +8,7 @@
 #include "autograd/ops/MatmulBackward.hpp"
 #include "autograd/ops/ReluBackward.hpp"
 #include "autograd/ops/MSEBackward.hpp"
+#include <memory>
 
 
 Tensor::Tensor(std::vector<size_t> shape){
@@ -52,40 +53,40 @@ float Tensor::operator()(int r, int c) const{
 
 }
 
-Tensor Tensor::add(Tensor& other){
+std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
     // matrix must have equal rows and columns to be added or equal col and one must be 1xC
 
     // special case for add is broadcasting
     // if 32*64 matrix is added to 1*64 it should be broadcasted to every row
-    if (other.shape_[0]==1 && this->shape_[1]==other.shape_[1]){
+    if (other->shape_[0]==1 && this->shape_[1]==other->shape_[1]){
         // broadcast
-        Tensor result(this->shape_);
+        auto result= std::make_shared<Tensor>(this->shape_);
         for (int r=0; r<this->shape_[0];r++){
-            for (int c=0; c<other.shape_[1];c++){
-                float sum=(*this).get(r,c)+other.get(0,c);
-                result.set(r,c,sum);
+            for (int c=0; c<other->shape_[1];c++){
+                float sum=(*this).get(r,c)+other->get(0,c);
+                result->set(r,c,sum);
             }
         }
-        if (this->requires_grad_|| other.requires_grad_){
-            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other.shared_from_this(),result.grad_);
-            result.grad_fn_=node;
-            result.requires_grad_=true;
+        if (this->requires_grad_|| other->requires_grad_){
+            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
+            result->grad_fn_=node;
+            result->requires_grad_=true;
         }
         
         return result;
     }
-    if (this->shape_[0]==other.shape_[0] && this->shape_[1]==other.shape_[1]){
-            Tensor result(shape_);
+    if (this->shape_[0]==other->shape_[0] && this->shape_[1]==other->shape_[1]){
+            auto result= std::make_shared<Tensor>(this->shape_);
             int total_elements=shape_[0]*shape_[1];
             for (int i=0;i<total_elements;i++){
-                float sum=data_[i]+other.data_[i];
-                result.data_[i]=sum;
+                float sum=data_[i]+other->data_[i];
+                result->data_[i]=sum;
             };
 
-        if (this->requires_grad_|| other.requires_grad_){
-            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other.shared_from_this(),result.grad_);
-            result.grad_fn_=node;
-            result.requires_grad_=true;
+        if (this->requires_grad_|| other->requires_grad_){
+            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
+            result->grad_fn_=node;
+            result->requires_grad_=true;
         }
         return result;
     }
@@ -124,31 +125,31 @@ void Tensor::randomize(){
     }
 }
 
-Tensor Tensor::matmul(const Tensor& other) const{
+std::shared_ptr<Tensor> Tensor::matmul(std::shared_ptr<Tensor> other) const{
     // matrix a can be multiplied with matrix b if
     // column of matrix A must be equal to row of Matrix B
-    if (this->shape_[1]!=other.shape_[0]){
+    if (this->shape_[1]!=other->shape_[0]){
         throw std::runtime_error("Cannot multiply matrices because dimension mismatch");
     }
 
     // resulting matrix will be (Rows of A, Columns of B)
 
-    std::vector<size_t>result_shape={this->shape_[0],other.shape_[1]};
-    Tensor result_tensor=Tensor(result_shape);
+    std::vector<size_t>result_shape={this->shape_[0],other->shape_[1]};
+    auto result_tensor=std::make_shared<Tensor>(result_shape);
     for (int r=0; r<this->shape_[0]; r++){
-        for(int c=0; c<other.shape_[1];c++){
+        for(int c=0; c<other->shape_[1];c++){
             float dotProduct=0.0f;
             for (int k=0;k<this->shape_[1];k++){
-                dotProduct+=(*this)(r,k)*other(k,c);
+                dotProduct+=(*this)(r,k)*(*other)(k,c);
             }
-            result_tensor.set(r,c,dotProduct);   
+            result_tensor->set(r,c,dotProduct);   
         }
     }
 
-    if (this->requires_grad_|| other.requires_grad_){
-            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other.shared_from_this(),result_tensor.grad_);
-            result_tensor.grad_fn_=node;
-            result_tensor.requires_grad_=true;
+    if (this->requires_grad_|| other->requires_grad_){
+            auto node=std::make_shared<MatmulBackward>(this->shared_from_this(),other,result_tensor->grad_);
+            result_tensor->grad_fn_=node;
+            result_tensor->requires_grad_=true;
         }
         
     return result_tensor;
@@ -157,20 +158,20 @@ Tensor Tensor::matmul(const Tensor& other) const{
 
 // to work on probably a new tensor reference after relu that is created that has the output
 // add the shared backward node 
-Tensor Tensor::relu(){
+std::shared_ptr<Tensor> Tensor::relu(){
 
     int max_data=this->data_.size();
-    Tensor result_tensor=Tensor(this->shape_);
+    auto result_tensor=std::make_shared<Tensor>(this->shape_);
     for (size_t i=0;i<max_data;i++){
         if (this->data_[i]<0){
-            result_tensor.data_[i]=0;
+            result_tensor->data_[i]=0;
         }else{
-            result_tensor.data_[i]=data_[i];
+            result_tensor->data_[i]=data_[i];
         }
     }
     if (this->requires_grad_){
-        auto node= std::make_shared<ReluBackward>(this->shared_from_this(),result_tensor.grad_);
-        result_tensor.grad_fn_=node;
+        auto node= std::make_shared<ReluBackward>(this->shared_from_this(),result_tensor->grad_);
+        result_tensor->grad_fn_=node;
     }
 
     return result_tensor;
@@ -237,12 +238,12 @@ void Tensor::backward(){
     
 }
 
-Tensor Tensor::mse_loss(const Tensor& target){
+std::shared_ptr<Tensor> Tensor::mse_loss(std::shared_ptr<Tensor>target){
 
     // target data
-    std::vector<float> data= target.get_data();
+    std::vector<float> data= target->get_data();
     // the resulting Tensor must be size of target
-    Tensor result({1,1});
+    auto result=std::make_shared<Tensor>(std::vector<size_t>{1,1});
     float total_sum=0.0f;
     for (size_t i=0; i<data.size();i++){
         float actual=data[i];
@@ -254,12 +255,12 @@ Tensor Tensor::mse_loss(const Tensor& target){
 
     float mean_loss= total_sum/ data.size();
 
-    result.set(0,0,mean_loss);
+    result->set(0,0,mean_loss);
 
     if (this->requires_grad_){
-        auto node= std::make_shared<MSEBackward>(target.shared_from_this(),this->shared_from_this(),result.grad_);
-        result.grad_fn_=node;
-        result.set_requires_grad(true);
+        auto node= std::make_shared<MSEBackward>(target,this->shared_from_this(),result->grad_);
+        result->grad_fn_=node;
+        result->set_requires_grad(true);
     }
     return result;
 

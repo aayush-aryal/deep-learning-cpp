@@ -13,12 +13,11 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     void set( int r, int c, float value);
     float get(int r, int c) const;
     float operator()(int r, int c) const;
-    Tensor add(Tensor& other);
+    std::shared_ptr<Tensor> add(std::shared_ptr<Tensor>other);
     friend std::ostream& operator<< (std::ostream& os,const Tensor& t);
     void randomize();
-    Tensor matmul(const Tensor& a) const;
-    Tensor relu();
-    void zero_grad();
+    std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>a) const;
+    std::shared_ptr<Tensor> relu();
 
     std::vector<float>&get_grad()const{
         return *grad_;
@@ -41,9 +40,7 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     }
 
     // loss func 
-    Tensor mse_loss(const Tensor& target);
-
-
+    std::shared_ptr<Tensor> mse_loss(std::shared_ptr<Tensor>target);
 
 
 
