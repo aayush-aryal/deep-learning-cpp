@@ -36,6 +36,17 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
         return data_;
     }
 
+    std::vector<float>& get_data_ref(){
+        return data_;
+    }
+
+    // loss func 
+    Tensor mse_loss(const Tensor& target);
+
+
+
+
+
     void set_requires_grad(bool val){
         requires_grad_=val;
     }

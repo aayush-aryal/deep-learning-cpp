@@ -129,5 +129,37 @@ int main() {
     for (float g : t->get_grad()) std::cout << g << " ";
     std::cout << "\n";
 }
+std::cout<<"----------MSE Loss-----------" << std::endl;
+
+{
+        auto pred = std::make_shared<Tensor>(std::vector<size_t>{1, 3});
+        auto target = std::make_shared<Tensor>(std::vector<size_t>{1, 3});
+        
+        pred->set_requires_grad(true);
+        pred->set(0, 0, 0.0f);
+        pred->set(0, 1, 1.0f);
+        pred->set(0, 2, 2.0f);
+
+        target->set(0, 0, 0.0f);
+        target->set(0, 1, 0.0f);
+        target->set(0, 2, 0.0f);
+
+        std::cout<<"Predictions: " << *pred;
+        std::cout<<"Targets: " << *target;
+
+        // forward pass
+        Tensor loss= pred->mse_loss(*target);
+        std::cout<< "Loss Output" << loss(0,0) <<"\n";
+
+        loss.backward();
+
+        std::cout<< "Gradient Prediction: ";
+        for (float g: pred->get_grad()){
+                std::cout<< g<< " ";
+        }
+        std::cout<<"\n";
+}
+
+return 0;
 
 }

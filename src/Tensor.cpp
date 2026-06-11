@@ -7,6 +7,7 @@
 #include "autograd/ops/AddBackward.hpp"
 #include "autograd/ops/MatmulBackward.hpp"
 #include "autograd/ops/ReluBackward.hpp"
+#include "autograd/ops/MSEBackward.hpp"
 
 
 Tensor::Tensor(std::vector<size_t> shape){
@@ -234,6 +235,34 @@ void Tensor::backward(){
         node->apply(*incoming_grad);
     }
     
+}
+
+Tensor Tensor::mse_loss(const Tensor& target){
+
+    // target data
+    std::vector<float> data= target.get_data();
+    // the resulting Tensor must be size of target
+    Tensor result({1,1});
+    float total_sum=0.0f;
+    for (size_t i=0; i<data.size();i++){
+        float actual=data[i];
+        float prediction=this->data_[i];
+        float curr_loss=(prediction-actual)*(prediction-actual);
+        total_sum+= curr_loss;
+        
+    }
+
+    float mean_loss= total_sum/ data.size();
+
+    result.set(0,0,mean_loss);
+
+    if (this->requires_grad_){
+        auto node= std::make_shared<MSEBackward>(target.shared_from_this(),this->shared_from_this(),result.grad_);
+        result.grad_fn_=node;
+        result.set_requires_grad(true);
+    }
+    return result;
+
 }
 
 
