@@ -2,6 +2,7 @@
 #include <vector>
 #include "Tensor.h"
 #include "SGD.h"
+#include "nn/Linear.h"
 
 int main() {
     std::cout << "Engine starting..." << std::endl;
@@ -182,6 +183,36 @@ int main() {
         std::cout << "Weight after step (Expected 1.6): " << weight->get(0, 0) << "\n";
         optimizer.zero_grad();
         std::cout << "Gradient after zero_grad (Expected 0.0): " << weight->get_grad()[0] << "\n";
+    }
+
+    std::cout<< "--------Linear Layer--------"<<std::endl;
+    {
+        Linear new_layer(3,2);
+        auto input= std::make_shared<Tensor>(std::vector<size_t>{1,3});
+        input->randomize();
+        SGD optimizer(new_layer.parameters(),0.01f);
+
+        auto target= std::make_shared<Tensor>(std::vector<size_t>{1,2});
+        target->set(0,0,1.0f);
+        target->set(0,1,0.0f);
+
+
+        for (int i=0; i<50; i++){
+            //  the training process is 
+            // clear old gradients
+            optimizer.zero_grad();
+            // do a new forward pass
+            auto pred= new_layer.forward(input);
+            // calculate the loss
+            auto loss= pred->mse_loss(target);
+            // backward pass based on the loss
+            loss->backward();
+            // update the weights 
+            optimizer.step();
+            std::cout << "Epoch " << i << " Loss: " << (*loss)(0, 0) << std::endl;
+        }   
+
+        std::cout<<"Final pred" << *new_layer.forward(input);
     }
 
     return 0;

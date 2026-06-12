@@ -13,4 +13,5 @@ add_executable(run_engine
                 src/autograd/ops/ReluBackward.cpp
                 src/autograd/ops/MSEBackward.cpp
                 src/SGD.cpp
+                src/nn/Linear.cpp
                 )
