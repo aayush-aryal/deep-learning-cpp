@@ -3,7 +3,10 @@
 #include "Tensor.h"
 #include "SGD.h"
 #include "nn/Linear.h"
-
+#include "nn/Relu.h"
+#include "nn/Sequential.h"
+#include "nn/Module.h"
+#include "vector"
 int main() {
     std::cout << "Engine starting..." << std::endl;
 
@@ -215,5 +218,42 @@ int main() {
         std::cout<<"Final pred" << *new_layer.forward(input);
     }
 
+    std::cout<< " Sequential Layer-----" <<std::endl;
+    {
+        std::unique_ptr<Linear> layer1 =std::make_unique<Linear>(3,2);
+        std::unique_ptr<Relu> activation= std::make_unique<Relu>();
+        std::unique_ptr<Linear> layer2=std::make_unique<Linear>(2,1);
+
+        std::vector<std::unique_ptr<Module>> layers;
+
+        // because unique pointers cannot be copied std::move needs to be used to move their reference
+        layers.push_back(std::move(layer1));
+        layers.push_back(std::move(activation));
+        layers.push_back(std::move(layer2));
+
+
+        Sequential combined_layers(std::move(layers));
+        auto input= std::make_shared<Tensor>(std::vector<size_t>{1,3});
+        input->set(0,0,1);
+        std::cout<<"Input tensor :"<<*input<< std::endl;
+        auto target= std::make_shared<Tensor>(std::vector<size_t>{1,1});
+        target->set(0,0,1.0f);
+
+        SGD optimizer(combined_layers.parameters(),0.1f);
+        for (int i=0; i<30; i++){
+            optimizer.zero_grad();
+            // forward pass
+            auto pred= combined_layers.forward(input);
+            auto loss= pred->mse_loss(target);
+            // back propagate based on loss ie update gradients
+            loss->backward();
+            // update weights based on updated grad
+            optimizer.step();
+            std::cout << "Epoch " << i << " Loss: " << (*loss)(0, 0) << std::endl;
+        }
+
+        std::cout<<"Final pred" << *combined_layers.forward(input);
+
+    }
     return 0;
 }
