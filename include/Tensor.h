@@ -15,9 +15,12 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     float operator()(int r, int c) const;
     std::shared_ptr<Tensor> add(std::shared_ptr<Tensor>other);
     friend std::ostream& operator<< (std::ostream& os,const Tensor& t);
-    void randomize();
+    void randomize(size_t input=1);
     std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>a) const;
     std::shared_ptr<Tensor> relu();
+
+    std::shared_ptr<Tensor> softmax_crossentropy(std::shared_ptr<Tensor> target);
+    std::shared_ptr<std::vector<float>> softmax(std::shared_ptr<Tensor> target);
 
     std::vector<float>&get_grad()const{
         return *grad_;

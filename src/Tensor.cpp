@@ -8,6 +8,7 @@
 #include "autograd/ops/MatmulBackward.hpp"
 #include "autograd/ops/ReluBackward.hpp"
 #include "autograd/ops/MSEBackward.hpp"
+#include "autograd/ops/SoftmaxBackward.hpp"
 #include <memory>
 
 
@@ -111,14 +112,15 @@ std::ostream& operator<<(std::ostream& os,const Tensor& t){
     return os;
 }
 
-void Tensor::randomize(){
+void Tensor::randomize(size_t input){
     // use random library instead of rand because it cannot give enough random values for large NNs
     // std::default_random_engine generator;
     // std::uniform_real_distribution<float> distribution(-1.0,1.0);
 
     std::random_device rd;
     std::mt19937 generator(rd());
-    std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
+    float stdev=std::sqrt(2.0f/input);
+    std::normal_distribution<float> distribution(0.0f,stdev);
     int total=shape_[0]*shape_[1];
     for (int i=0; i<total;i++){
         data_[i]=distribution(generator);
@@ -172,11 +174,100 @@ std::shared_ptr<Tensor> Tensor::relu(){
     if (this->requires_grad_){
         auto node= std::make_shared<ReluBackward>(this->shared_from_this(),result_tensor->grad_);
         result_tensor->grad_fn_=node;
+        result_tensor->requires_grad_=true;
     }
 
     return result_tensor;
 }
 
+
+// since in other operations output at index (r,c) depends on the input at index (r,c)
+// but in softmax since we sum all exponents, each output is dependent on all other input
+// if you implement softmax and backprpop on its own with crossentropy and its backward the back propagation becomes very complex and numerically unstable
+// so if you fuse the two operations the resulting grad is easily calculated as it is (pred-target) for each
+
+
+std::shared_ptr<Tensor> Tensor::softmax_crossentropy(std::shared_ptr<Tensor>target){
+    auto softmax_prob=std::make_shared<std::vector<float>>();
+    (*softmax_prob).resize(this->shape_[0]* this->shape_[1]);
+    float total=0.0f;
+
+        // exp(x - max) / sum(exp(xi - max))
+        // = exp(x) * exp(-max) / (sum(exp(xi)) * exp(-max))
+        // = exp(x) / sum(exp(xi))
+
+        // we subtract by max of the given row in order to prevent overflow due to exp of large numbers
+    for (size_t r=0; r<this->shape_[0];r++){
+        total=0.0f;
+        float maximum=this->get(r,0);
+        for (size_t c=0; c<this->shape_[1];c++){
+            if (this->get(r,c)>maximum){
+                maximum=this->get(r,c);
+            }     
+        } 
+        for (size_t c=0; c<this->shape_[1];c++){
+            total+=(std::exp(this->get(r,c)-maximum));   
+        }
+        for (size_t c=0; c<this->shape_[1];c++){
+            float curr_val=std::exp(this->get(r,c)-maximum);
+            size_t index= (r*this->shape_[1])+c;
+            (*softmax_prob)[index]=curr_val/total;
+        }
+    }
+    // after calculating the result we need to do crossentropy loss which can be given as 
+    //-log(pred_probability_of_true_class)
+    float total_loss=0.0f;
+
+    for (size_t row=0; row<this->shape_[0]; row++){
+        
+        for (size_t col=0; col<this->shape_[1];col++){
+            // we use log to determine loss, after we use exp for softmax to create probabilities
+            size_t index= (row*this->shape_[1])+col;
+            float prob=std::log((*softmax_prob)[index]);
+            total_loss+= -1.0f * prob* target->get(row,col);
+        }
+
+    }
+    // this will store the average loss across all images
+    auto loss_tensor=std::make_shared<Tensor>(std::vector<size_t>{1,1});
+    loss_tensor->set(0,0,total_loss/this->shape_[0]);
+    if (this->get_requires_grad()){
+        loss_tensor->set_requires_grad(true);
+        // one more step is to add backward node and set it as grad fn
+        auto node= std::make_shared<SoftmaxBackward>(this->shared_from_this(),softmax_prob,loss_tensor->grad_,target);
+        loss_tensor->grad_fn_=node;
+    }
+    return loss_tensor;
+}
+std::shared_ptr<std::vector<float>> Tensor::softmax(std::shared_ptr<Tensor>target){
+    auto softmax_prob=std::make_shared<std::vector<float>>();
+    (*softmax_prob).resize(this->shape_[0]* this->shape_[1]);
+    float total=0.0f;
+
+        // exp(x - max) / sum(exp(xi - max))
+        // = exp(x) * exp(-max) / (sum(exp(xi)) * exp(-max))
+        // = exp(x) / sum(exp(xi))
+
+        // we subtract by max of the given row in order to prevent overflow due to exp of large numbers
+    for (size_t r=0; r<this->shape_[0];r++){
+        total=0.0f;
+        float maximum=this->get(r,0);
+        for (size_t c=0; c<this->shape_[1];c++){
+            if (this->get(r,c)>maximum){
+                maximum=this->get(r,c);
+            }     
+        } 
+        for (size_t c=0; c<this->shape_[1];c++){
+            total+=(std::exp(this->get(r,c)-maximum));   
+        }
+        for (size_t c=0; c<this->shape_[1];c++){
+            float curr_val=std::exp(this->get(r,c)-maximum);
+            size_t index= (r*this->shape_[1])+c;
+            (*softmax_prob)[index]=curr_val/total;
+        }
+    }
+    return softmax_prob;
+}
 
 void Tensor::backward(){
     // if its not created through a mathematical operation return
@@ -265,6 +356,8 @@ std::shared_ptr<Tensor> Tensor::mse_loss(std::shared_ptr<Tensor>target){
     return result;
 
 }
+
+
 
 
 // void Tensor::backward(){

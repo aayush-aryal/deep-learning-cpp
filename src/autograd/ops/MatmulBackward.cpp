@@ -65,8 +65,8 @@ void MatmulBackward::apply(const std::vector<float>& incoming_grad){
     std::vector<size_t> shape_incoming = {shapeA[0], shapeB[1]}; // M x P
 
     // now we need to know how to restribute incoming gradient in betweeen the parent gradient for matrix multiplication
-    std::vector<float> resB=matrix_multiply(dataA,incoming_grad,shapeA,shape_incoming,false,true);
-    std::vector<float> resA=matrix_multiply(incoming_grad,dataB,shape_incoming,shapeB,true,false);
+    std::vector<float> resB=matrix_multiply(dataA,incoming_grad,shapeA,shape_incoming,true,false);
+    std::vector<float> resA=matrix_multiply(incoming_grad,dataB,shape_incoming,shapeB,false,true);
 
     for (size_t i=0; i<gradA.size();i++){
         gradA[i]+=resA[i];
