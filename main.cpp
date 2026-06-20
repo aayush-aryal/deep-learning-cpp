@@ -257,7 +257,7 @@ int main() {
 
         std::cout<<"Final pred" << *combined_layers.forward(input);
     }
-    std::cout<< " Softmax Crossentropy -----" <<std::endl;
+    std::cout<< "----- Softmax Crossentropy -----" <<std::endl;
     {
         std::unique_ptr<Linear> layer1 =std::make_unique<Linear>(3,6);
         std::unique_ptr<Linear> layer2=std::make_unique<Linear>(6,3);
@@ -300,7 +300,7 @@ int main() {
         std::cout<<"]"<<std::endl;
     }
 
-    std::cout<< "MNIST test" << std::endl;
+    std::cout<< "----MNIST test----" << std::endl;
     {
         std::unique_ptr<Linear> layer1 =std::make_unique<Linear>(784,128);
         std::unique_ptr<Relu> layer2= std::make_unique<Relu>();
@@ -353,7 +353,6 @@ int main() {
             float average_train_epoch_loss = total_train_loss_sum / total_train_samples_processed;
             float average_train_epoch_accuracy=total_train_accuracy_sum/total_train_samples_processed;
             std::cout << "=======================================" << std::endl;
-            std::cout << "Epoch " << k+1 << " Finished." << std::endl;
             std::cout << "Average Train Dataset Loss: " << average_train_epoch_loss << std::endl;
             std::cout << "Average Train Dataset Accuracy: " << average_train_epoch_accuracy << std::endl;
 
@@ -374,9 +373,9 @@ int main() {
 
             float average_test_epoch_loss = total_test_loss_sum / total_test_samples_processed;
             float average_test_epoch_accuracy=total_test_accuracy_sum/total_test_samples_processed;
-            std::cout << "Epoch " << k+1 << " Finished." << std::endl;
             std::cout << "Average Test Dataset Loss: " << average_test_epoch_loss << std::endl;
             std::cout << "Average Test Dataset Accuracy: " << average_test_epoch_accuracy << std::endl;
+            std::cout << "Epoch " << k+1 << " Finished." << std::endl;
             std::cout << "=======================================" << std::endl;
 
         }    

@@ -13,7 +13,7 @@ It includes:
 - A small neural network module system, with a shared Module interface and implementations for the Linear and ReLU layers, plus a Sequential container that chains modules together and collects their parameters automatically
 - Softmax combined with cross entropy loss, implemented as a single fused operation for numerical stability and a clean gradient through (pred-target)
 - He initialization for weights, which keeps ReLU activations healthy during training and avoids the dying neuron problem that comes from naive random initialization
-- A basic SGD optimizer that updates parameters using their accumulated gradients and lr
+- A basic SGD optimizer that updates parameters using their accumulated gradients and learning rate
 - A CSV based data loader for MNIST that handles shuffling, batching, and one hot encoding of labels
 - An end to end training loop that trains a small multilayer perceptron on the full MNIST training set and evaluates it on a held out test set
 
@@ -27,9 +27,9 @@ The neural network layer on top of this follows the same pattern used by real fr
 
 ## Results
 
-After training a three layer network with 128 hidden units and 64 hidden units on the full MNIST training set of 60000 images, the model reaches roughly 90 percent accuracy on a held out test set of 10000 images. Training accuracy and test accuracy stay close to each other throughout training, which means the model is generalizing reasonably well rather than memorizing the training set.
+After training a three layer network with 128 hidden units and 64 hidden units on the full MNIST training set of 60000 images, the model reaches roughly 89 percent accuracy on a held out test set of 10000 images. Training accuracy and test accuracy stay close to each other throughout training, which means the model is generalizing reasonably well rather than memorizing the training set.
 
-Training started around 64 percent accuracy after the first epoch and climbed steadily before beginning to plateau around the ninth and tenth epoch, suggesting the model is approaching the limit of what this architecture and learning rate can achieve without further tuning.
+Test accuracy starts around 84 percent after the first epoch and climbs steadily from there as training continues.
 
 ## Building and Running
 
@@ -53,7 +53,7 @@ A large part of this project was learning C++ memory ownership the hard way. Ear
 
 Another major lesson came from training instability on the softmax cross entropy loss. The first few attempts exploded into NaN or got stuck outputting the same prediction for every input. Part of this came from dying ReLU units combined with weight initialization that was simply too large for the network to recover from. Switching to He initialization, where weights are drawn from a normal distribution scaled by the number of incoming connections, fixed that piece and made training noticeably more stable.
 
-The instability did not fully go away though, and the real remaining cause turned out to be an incorrect transpose inside the matmul backward pass. This one was especially hard to catch because early tests still showed the loss going down, which made the gradients look correct even though they were not. It took a lot more careful checking before the transpose logic was actually fixed.
+The instability did not fully go away though, and the real remaining cause turned out to be an incorrect transpose inside the matmul backward pass. This one was especially hard to catch because it only showed up once softmax and cross entropy loss were added. Simpler tests using plain Linear layers and Sequential with mean squared error loss never exposed it, and the loss in those early softmax tests still appeared to go down, which made the gradients look correct even though they were not. It took a lot more careful checking before the transpose logic was actually fixed.
 
 A separate and much trickier bug only showed up at larger batch sizes, where the program would segfault for no obvious reason. Batch size of one always worked fine, which ruled out a lot of the usual suspects. The actual cause was incorrect gradient accumulation during the backward pass for broadcasting, since broadcasting needs gradients summed across the batch dimension in a way that ordinary elementwise addition does not. Once that was handled correctly, training at any batch size became stable.
 
