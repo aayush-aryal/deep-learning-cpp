@@ -17,5 +17,8 @@ add_executable(run_engine
                 src/nn/Linear.cpp
                 src/nn/Relu.cpp
                 src/nn/Sequential.cpp
+
+                src/Dataloader.cpp
+                src/utility.cpp
                 
                 )

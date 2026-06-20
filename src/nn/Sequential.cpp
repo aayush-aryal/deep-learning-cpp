@@ -21,6 +21,7 @@ std::shared_ptr<Tensor> Sequential::forward(std::shared_ptr<Tensor> input){
 }
 
 
+
 std::vector<std::shared_ptr<Tensor>> Sequential::parameters(){
     std::vector<std::shared_ptr<Tensor>> tensors;
         for (std::unique_ptr<Module>& m: this->modules_){

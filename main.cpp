@@ -7,6 +7,8 @@
 #include "nn/Sequential.h"
 #include "nn/Module.h"
 #include "vector"
+#include "Dataloader.h"
+#include "utility.h"
 
 int main() {
     std::cout << "Engine starting..." << std::endl;
@@ -298,5 +300,86 @@ int main() {
         std::cout<<"]"<<std::endl;
     }
 
+    std::cout<< "MNIST test" << std::endl;
+    {
+        std::unique_ptr<Linear> layer1 =std::make_unique<Linear>(784,128);
+        std::unique_ptr<Relu> layer2= std::make_unique<Relu>();
+        std::unique_ptr<Linear> layer3=std::make_unique<Linear>(128,64);
+        std::unique_ptr<Linear> layer4=std::make_unique<Linear>(64,10);
+
+        std::vector<std::unique_ptr<Module>> layers;
+
+        // because unique pointers cannot be copied std::move needs to be used to move their reference
+        layers.push_back(std::move(layer1));
+        layers.push_back(std::move(layer2));
+        layers.push_back(std::move(layer3));
+        layers.push_back(std::move(layer4));
+
+        Sequential combined_layers(std::move(layers));
+        SGD optimizer(combined_layers.parameters(),0.01f);
+        DataLoader d("/Users/aayush-aryal/Documents/deep-learning-cpp/datasets/mnist_train.csv",32);
+        DataLoader t("/Users/aayush-aryal/Documents/deep-learning-cpp/datasets/mnist_test.csv",32);
+        for (size_t k=0; k<20; k++){
+            d.reset_and_shuffle();
+            t.reset_and_shuffle();
+
+            // this is for train 
+            float total_train_loss_sum = 0.0f;
+            int total_train_samples_processed = 0;
+            int train_batch_idx = 0;
+            float total_train_accuracy_sum=0.0f;
+
+            // this is for test
+            float total_test_loss_sum = 0.0f;
+            int total_test_samples_processed = 0;
+            int test_batch_idx = 0;
+            float total_test_accuracy_sum=0.0f;
+
+            while (d.has_next_batch()){
+                // get target and output for next batch
+                auto [input,target]=d.get_next_batch();
+                optimizer.zero_grad();
+                auto pred=combined_layers.forward(input);
+                auto loss= pred->softmax_crossentropy(target);
+                loss->backward();
+                optimizer.step();
+                int current_batch_size = input->get_shape()[0];
+                total_train_loss_sum+=(*loss)(0,0)*current_batch_size;
+                total_train_samples_processed+=current_batch_size;
+                // calculate accuracy
+                total_train_accuracy_sum+=accuracy(pred,target)*current_batch_size;
+                // std::cout << "Epoch " << i << " Loss: " << (*loss)(0, 0) << std::endl;
+            }
+            float average_train_epoch_loss = total_train_loss_sum / total_train_samples_processed;
+            float average_train_epoch_accuracy=total_train_accuracy_sum/total_train_samples_processed;
+            std::cout << "=======================================" << std::endl;
+            std::cout << "Epoch " << k+1 << " Finished." << std::endl;
+            std::cout << "Average Train Dataset Loss: " << average_train_epoch_loss << std::endl;
+            std::cout << "Average Train Dataset Accuracy: " << average_train_epoch_accuracy << std::endl;
+
+            while (t.has_next_batch()){
+                // get target and output for next batch
+                auto [input,target]=t.get_next_batch();
+                auto pred=combined_layers.forward(input);
+                auto loss= pred->softmax_crossentropy(target);
+                // loss->backward();
+                // optimizer.step();
+                int current_batch_size = input->get_shape()[0];
+                total_test_loss_sum+=(*loss)(0,0)*current_batch_size;
+                total_test_samples_processed+=current_batch_size;
+                // calculate accuracy
+                total_test_accuracy_sum+=accuracy(pred,target)*current_batch_size;
+                // std::cout << "Epoch " << i << " Loss: " << (*loss)(0, 0) << std::endl;
+            }
+
+            float average_test_epoch_loss = total_test_loss_sum / total_test_samples_processed;
+            float average_test_epoch_accuracy=total_test_accuracy_sum/total_test_samples_processed;
+            std::cout << "Epoch " << k+1 << " Finished." << std::endl;
+            std::cout << "Average Test Dataset Loss: " << average_test_epoch_loss << std::endl;
+            std::cout << "Average Test Dataset Accuracy: " << average_test_epoch_accuracy << std::endl;
+            std::cout << "=======================================" << std::endl;
+
+        }    
+    }
     return 0;
 }

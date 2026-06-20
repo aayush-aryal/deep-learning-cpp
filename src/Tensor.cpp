@@ -10,6 +10,7 @@
 #include "autograd/ops/MSEBackward.hpp"
 #include "autograd/ops/SoftmaxBackward.hpp"
 #include <memory>
+#include <assert.h>
 
 
 Tensor::Tensor(std::vector<size_t> shape){
