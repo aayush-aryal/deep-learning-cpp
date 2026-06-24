@@ -305,7 +305,8 @@ int main() {
         std::unique_ptr<Linear> layer1 =std::make_unique<Linear>(784,128);
         std::unique_ptr<Relu> layer2= std::make_unique<Relu>();
         std::unique_ptr<Linear> layer3=std::make_unique<Linear>(128,64);
-        std::unique_ptr<Linear> layer4=std::make_unique<Linear>(64,10);
+        std::unique_ptr<Relu>   layer4 = std::make_unique<Relu>();
+        std::unique_ptr<Linear> layer5=std::make_unique<Linear>(64,10);
 
         std::vector<std::unique_ptr<Module>> layers;
 
@@ -314,6 +315,7 @@ int main() {
         layers.push_back(std::move(layer2));
         layers.push_back(std::move(layer3));
         layers.push_back(std::move(layer4));
+        layers.push_back(std::move(layer5));
 
         Sequential combined_layers(std::move(layers));
         SGD optimizer(combined_layers.parameters(),0.01f);
@@ -321,7 +323,6 @@ int main() {
         DataLoader t("/Users/aayush-aryal/Documents/deep-learning-cpp/datasets/mnist_test.csv",32);
         for (size_t k=0; k<20; k++){
             d.reset_and_shuffle();
-            t.reset_and_shuffle();
 
             // this is for train 
             float total_train_loss_sum = 0.0f;

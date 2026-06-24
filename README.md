@@ -29,7 +29,10 @@ The neural network layer on top of this follows the same pattern used by real fr
 
 After training a three layer network with 128 hidden units and 64 hidden units on the full MNIST training set of 60000 images, the model reaches roughly 89 percent accuracy on a held out test set of 10000 images. Training accuracy and test accuracy stay close to each other throughout training, which means the model is generalizing reasonably well rather than memorizing the training set.
 
-Test accuracy starts around 84 percent after the first epoch and climbs steadily from there as training continues.
+Test accuracy starts around **91%** after the first epoch and climbs steadily climbs to **97%** as training continues.
+
+![MNIST Training Results](assets/initial.png)
+![MNIST Training Results](assets/final.png)
 
 ## Building and Running
 

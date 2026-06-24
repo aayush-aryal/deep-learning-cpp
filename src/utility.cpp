@@ -10,17 +10,18 @@ float accuracy(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target){
 
 
     for (size_t r=0; r<rows;r++){
-        size_t max_index=0;
+        size_t max_col=0;
         float max_prob=input->get(r,0);
         for (size_t c=0; c<cols; c++){
             // for each col find the index with the highest softmax probability 
             if (input->get(r,c)>max_prob){
-                max_index=(r*cols)+c;
+                max_col=c;
                 max_prob=input->get(r,c);
             }
         }
+        size_t flat_index=r*cols+max_col;
         // after this iteration we know what the max index for the thing is now we check if the same index in target is 1, if so we increase "total_correct"
-        if (target->get_data()[max_index]==1.0f){
+        if (target->get_data()[flat_index]==1.0f){
             total_correct+=1;
         }
     }
