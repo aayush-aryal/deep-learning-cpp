@@ -323,6 +323,7 @@ int main() {
         DataLoader t("/Users/aayush-aryal/Documents/deep-learning-cpp/datasets/mnist_test.csv",32);
         for (size_t k=0; k<20; k++){
             d.reset_and_shuffle();
+            t.reset();
 
             // this is for train 
             float total_train_loss_sum = 0.0f;
@@ -371,14 +372,12 @@ int main() {
                 total_test_accuracy_sum+=accuracy(pred,target)*current_batch_size;
                 // std::cout << "Epoch " << i << " Loss: " << (*loss)(0, 0) << std::endl;
             }
-
-            float average_test_epoch_loss = total_test_loss_sum / total_test_samples_processed;
-            float average_test_epoch_accuracy=total_test_accuracy_sum/total_test_samples_processed;
-            std::cout << "Average Test Dataset Loss: " << average_test_epoch_loss << std::endl;
-            std::cout << "Average Test Dataset Accuracy: " << average_test_epoch_accuracy << std::endl;
-            std::cout << "Epoch " << k+1 << " Finished." << std::endl;
-            std::cout << "=======================================" << std::endl;
-
+                float average_test_epoch_loss = total_test_loss_sum / total_test_samples_processed;
+                float average_test_epoch_accuracy=total_test_accuracy_sum/total_test_samples_processed;
+                std::cout << "Average Test Dataset Loss: " << average_test_epoch_loss << std::endl;
+                std::cout << "Average Test Dataset Accuracy: " << average_test_epoch_accuracy << std::endl;
+                std::cout << "Epoch " << k+1 << " Finished." << std::endl;
+                std::cout << "=======================================" << std::endl;
         }    
     }
     return 0;

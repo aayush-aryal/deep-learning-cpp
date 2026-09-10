@@ -17,6 +17,7 @@ class DataLoader{
         };
 
         void reset_and_shuffle();
+        void reset();
         bool has_next_batch();
         std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>get_next_batch();
 

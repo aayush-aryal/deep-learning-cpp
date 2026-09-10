@@ -52,6 +52,10 @@ void DataLoader::reset_and_shuffle(){
     std::shuffle(this->index_order_.begin(), this->index_order_.end(), generator);
 }
 
+void DataLoader::reset(){
+    this->curr_index_=0;
+}
+
 std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>> DataLoader::get_next_batch(){
     // to keep in mind 784 is hardcoded to match total pixels for one image in mnist dataset
     auto input_tensor= std::make_shared<Tensor>(std::vector<size_t>{this->batch_size_,784});
