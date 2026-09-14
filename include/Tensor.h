@@ -11,8 +11,15 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     Tensor(std::vector<size_t>shape);
     void printShape();
     void set( int r, int c, float value);
+    void set(std::vector<size_t> dim, float value);
+
+    // im going to overload get to include a n-dimensional parameter 
     float get(int r, int c) const;
+    float get(std::vector<size_t> index) const;
+
     float operator()(int r, int c) const;
+
+    void set_stride();
     std::shared_ptr<Tensor> add(std::shared_ptr<Tensor>other);
     friend std::ostream& operator<< (std::ostream& os,const Tensor& t);
     void randomize(size_t input=1);
@@ -57,6 +64,12 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     
     void backward();
 
+    std::vector<size_t> compute_strides();
+
+    size_t flat_index(std::vector<size_t> index) const;
+
+    std::vector<size_t> pad_shape(std::vector<size_t> shape, size_t target_length);
+    std::vector<size_t> pad_strides(std::vector<size_t> strides, std::vector<size_t>shape, size_t target_length);
 
     private:
     std::vector<float> data_;
@@ -64,4 +77,5 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     // for autograd
     std::shared_ptr<std::vector<float>> grad_;
     bool requires_grad_;
+    std::vector<size_t> strides_;
 };

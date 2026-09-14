@@ -29,7 +29,9 @@ Tensor::Tensor(std::vector<size_t> shape){
     data_.resize(total,0.0f);
     grad_=std::make_shared<std::vector<float>>(total,0.0f);
     this->requires_grad_=false;
-    
+
+    // set strides
+    set_stride(); 
 }
 
 void Tensor::set(int r, int c, float value){
@@ -38,15 +40,28 @@ void Tensor::set(int r, int c, float value){
 
 }
 
+void Tensor::set(std::vector<size_t>idx, float value){
+    int index= this->flat_index(idx);
+    data_[index]=value;
+}
+
 float Tensor::get(int r, int c) const{
     if (shape_.size() != 2) throw std::runtime_error("get(r,c) only works on 2D Tensors!");
     int index=r*shape_[1]+c;
     return data_[index];
 }
 
-void::Tensor::printShape(){
-    std::cout<< "Shape dimensions: " << shape_[0] << "x"<< shape_[1] << std::endl;
+float Tensor::get(std::vector<size_t> index)const{
+    size_t flat_index=this->flat_index(index);
+    return data_[flat_index];
+}
 
+void Tensor::printShape(){
+    std::cout<< "Shape dimensions: ";
+    for (int i=0; i<this->shape_.size();i++){
+        std::cout<< this->shape_[i]<< ",";
+    }
+    std::cout<< std::endl;
 }
 
 float Tensor::operator()(int r, int c) const{
@@ -55,61 +70,151 @@ float Tensor::operator()(int r, int c) const{
 
 }
 
-std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
-    // matrix must have equal rows and columns to be added or equal col and one must be 1xC
 
-    // special case for add is broadcasting
-    // if 32*64 matrix is added to 1*64 it should be broadcasted to every row
-    if (other->shape_[0]==1 && this->shape_[1]==other->shape_[1]){
-        // broadcast
-        auto result= std::make_shared<Tensor>(this->shape_);
-        for (int r=0; r<this->shape_[0];r++){
-            for (int c=0; c<other->shape_[1];c++){
-                float sum=(*this).get(r,c)+other->get(0,c);
-                result->set(r,c,sum);
-            }
+size_t get_correct_index(std::vector<size_t>index, std::vector<size_t> strides){
+    size_t correct_index=0;
+    if (index.size()!=strides.size()){
+        return -1;
+    }
+    for (int i=0; i<index.size();i++){
+        correct_index+=strides[i]*index[i];
+    }
+    return correct_index;
+}
+
+// returns true if you can increment index and false if it overflowed
+bool increment_index(std::vector<size_t>& idx, const std::vector<size_t>& shape){
+    int p= idx.size()-1;
+    while (p>=0){
+        idx[p]=idx[p]+1;
+        if (idx[p]<shape[p]){
+            return true;
+        }else{
+            idx[p]=0;
+            p--;
         }
-        if (this->requires_grad_|| other->requires_grad_){
-            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
-            result->grad_fn_=node;
-            result->requires_grad_=true;
-        }
+            
+    }
+    return false;
+}
+
+// std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
+//     // matrix must have equal rows and columns to be added or equal col and one must be 1xC
+
+//     // special case for add is broadcasting
+//     // if 32*64 matrix is added to 1*64 it should be broadcasted to every row
+//     if (other->shape_[0]==1 && this->shape_[1]==other->shape_[1]){
+//         // broadcast
+//         auto result= std::make_shared<Tensor>(this->shape_);
+//         for (int r=0; r<this->shape_[0];r++){
+//             for (int c=0; c<other->shape_[1];c++){
+//                 float sum=(*this).get(r,c)+other->get(0,c);
+//                 result->set(r,c,sum);
+//             }
+//         }
+//         if (this->requires_grad_|| other->requires_grad_){
+//             auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
+//             result->grad_fn_=node;
+//             result->requires_grad_=true;
+//         }
         
-        return result;
-    }
-    if (this->shape_[0]==other->shape_[0] && this->shape_[1]==other->shape_[1]){
-            auto result= std::make_shared<Tensor>(this->shape_);
-            int total_elements=shape_[0]*shape_[1];
-            for (int i=0;i<total_elements;i++){
-                float sum=data_[i]+other->data_[i];
-                result->data_[i]=sum;
-            };
+//         return result;
+//     }
+//     if (this->shape_[0]==other->shape_[0] && this->shape_[1]==other->shape_[1]){
+//             auto result= std::make_shared<Tensor>(this->shape_);
+//             int total_elements=shape_[0]*shape_[1];
+//             for (int i=0;i<total_elements;i++){
+//                 float sum=data_[i]+other->data_[i];
+//                 result->data_[i]=sum;
+//             };
 
-        if (this->requires_grad_|| other->requires_grad_){
-            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
-            result->grad_fn_=node;
-            result->requires_grad_=true;
+//         if (this->requires_grad_|| other->requires_grad_){
+//             auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
+//             result->grad_fn_=node;
+//             result->requires_grad_=true;
+//         }
+//         return result;
+//     }
+//     throw std::runtime_error("Cannot add: dimensions mismatch and not broadcastable.");
+// }
+
+// adapting addition operation for n-dimensional tensors
+std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
+    // two ways we can add two tensors are
+    // if all of their dimensions match
+    // if their dimensions are equal or one of them is 1
+    // if they are equal
+    if (this->shape_== other->shape_){
+        // we can just sum individual flat index for each tensor
+        auto result= std::make_shared<Tensor>(this->shape_);
+        for (int i=0; i<this->data_.size();i++){
+            result->data_[i]=this->data_[i]+other->data_[i];
         }
+        auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
+        result->grad_fn_=node;
+        result->requires_grad_=true;
         return result;
     }
-    throw std::runtime_error("Cannot add: dimensions mismatch and not broadcastable.");
+
+    // if not loop through each dimension if they are 1 or equal do sum
+    size_t target_length=std::max(this->shape_.size(),other->shape_.size());
+    std::vector<size_t> padded_shape_this=this->pad_shape(this->shape_,target_length);
+    std::vector<size_t> padded_shape_other=other->pad_shape(other->shape_,target_length);
+
+    // we need to pad strides as well
+    std::vector<size_t> padded_strides_this=this->pad_strides(this->shape_,this->strides_,target_length);
+     std::vector<size_t> padded_strides_other=other->pad_strides(other->shape_,other->strides_,target_length);
+
+
+    std::vector<size_t> res_shape;
+    for(int i=0; i<padded_shape_this.size();i++){
+        if (padded_shape_this[i]!=padded_shape_other[i] && (padded_shape_other[i]!=1 && padded_shape_this[i]!=1)){
+             throw std::runtime_error("Cannot add: dimensions mismatch and not broadcastable");
+        }
+        if (padded_shape_other[i]>padded_shape_this[i]){
+            res_shape.push_back(padded_shape_other[i]);
+        }else{
+            res_shape.push_back(padded_shape_this[i]);
+        }
+    }
+    auto result=std::make_shared<Tensor>(res_shape);
+
+    // now use this loop to actually broadcast
+    std::vector<size_t> idx(res_shape.size(),0);
+    do{
+        size_t flat_index_this=get_correct_index(idx,padded_strides_this);
+        size_t flat_index_others=get_correct_index(idx,padded_strides_other);
+        size_t flat_index_res=get_correct_index(idx,result->strides_);
+
+        result->data_[flat_index_res]=this->data_[flat_index_this]+other->data_[flat_index_others];
+
+    }while(increment_index(idx,res_shape));   
+    auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
+    result->grad_fn_=node;
+    result->requires_grad_=true;
+    return result;
 }
 
 std::ostream& operator<<(std::ostream& os,const Tensor& t){
     // overload << so it knows how to print tensors
-    os<< "Shape ("<<t.shape_[0]<< "x"<< t.shape_[1]<< ")"<<std::endl;
-    int rows=t.shape_[0];
-    int cols=t.shape_[1];
-    for (int i=0;i<rows;i++){
-        os<<"[";
-        for (int j=0; j<cols;j++){
-            os<<t(i,j);
-            if (j!=cols-1){
-                os<<",";
-            }
+    os << "Shape (";
+    for (int i=0; i<t.shape_.size();i++){
+        os<<t.shape_[i];
+        if (i!=t.shape_.size()-1){
+            os<<"x";
         }
-        os<<"]"<<std::endl;
     }
+    os << ")" << std::endl;
+
+    std::vector<size_t>idx(t.shape_.size(),0);
+
+    do{
+        size_t index= t.flat_index(idx);
+        os<< t.data_[index]<< " ";
+
+    }while (increment_index(idx,t.shape_));
+
+    os<<std::endl;
     return os;
 }
 
@@ -407,3 +512,73 @@ std::shared_ptr<Tensor> Tensor::mse_loss(std::shared_ptr<Tensor>target){
 
 
 // }
+
+
+//implementaiton for a n-dimensional array in order to support transformer architecture
+
+std::vector<size_t>Tensor::compute_strides(){
+
+    std::vector<size_t> strides;
+    size_t acc_stride=1;
+
+    for (int i=this->shape_.size()-1;i>=0;i--){
+        // stride indicates how much you need to jump for each dimension for the given shape, first stride is always one
+        strides.insert(strides.begin(),acc_stride);
+        acc_stride=this->shape_[i]*acc_stride;
+
+    }
+    return strides;
+}
+
+void Tensor::set_stride(){
+    std::vector<size_t>strides=this->compute_strides();
+    this->strides_=strides;
+}
+
+
+// flat index returns the index for the 1 dimensional vector for an n dimensional index
+size_t Tensor::flat_index(std::vector<size_t>index) const{
+    if (index.size()!= this->shape_.size()){
+        throw std::invalid_argument("flat_index: index size does not match tensor rank");
+    }
+    // now each stride* each index gives you the correct flat index of the element you are looking for 
+    size_t correct_index=0;
+    for (int i=0; i<index.size();i++){
+        correct_index+=this->strides_[i]*index[i];
+    }
+    return correct_index;
+}
+
+
+// for broadcasting n dimensional array (2,3,4)+(4) we should be able to broadcast
+// it should pad its shape (1,1,4) and its strides we calculate as well
+
+std::vector<size_t> Tensor::pad_shape(std::vector<size_t> shape, size_t target_length){
+
+    std::vector<size_t> copy= shape;
+    for (int i=target_length-shape.size()-1;i>=0;i--){
+        copy.insert(copy.begin(),1);
+    }
+    return copy;
+}
+
+std::vector<size_t> Tensor::pad_strides(std::vector<size_t> shape, std::vector<size_t> strides, size_t target_length){
+    std::vector<size_t> copy=strides;
+    // pad dimensiosn that have been stretched as 0
+    for (int i=target_length-shape.size()-1;i>=0;i--){
+        copy.insert(copy.begin(),0);
+    }
+    // check original dimensions if any of them is 1 then set the stride to 0
+    for (int j=0;j<=shape.size()-1;j++){
+        int offset=copy.size()-shape.size();
+        if (shape[j]==1){
+            copy[j+offset]=0;
+        }
+    }
+    return copy;
+
+}
+
+
+
+
