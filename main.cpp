@@ -70,27 +70,27 @@ int main() {
     //     std::cout << *out;
     // }
 
-    // std::cout << "--------------Autograd Add-------------" << std::endl;
-    // {
-    //     auto A = std::make_shared<Tensor>(std::vector<size_t>{1, 3});
-    //     auto B = std::make_shared<Tensor>(std::vector<size_t>{1, 3});
-    //     A->set_requires_grad(true);
-    //     B->set_requires_grad(true);
+    std::cout << "--------------Autograd Add-------------" << std::endl;
+    {
+        auto A = std::make_shared<Tensor>(std::vector<size_t>{1,2,3, 3});
+        auto B = std::make_shared<Tensor>(std::vector<size_t>{3});
+        A->set_requires_grad(true);
+        B->set_requires_grad(true);
 
-    //     A->randomize();
-    //     B->randomize();
+        A->randomize();
+        B->randomize();
 
-    //     auto C = A->add(B);
-    //     C->backward();
+        auto C = A->add(B);
+        C->backward();
 
-    //     std::cout << "Gradient A: ";
-    //     for (float g : A->get_grad()) std::cout << g << " ";
-    //     std::cout << "\n";
+        std::cout << "Gradient A: ";
+        for (float g : A->get_grad()) std::cout << g << " ";
+        std::cout << "\n";
 
-    //     std::cout << "Gradient B: ";
-    //     for (float g : B->get_grad()) std::cout << g << " ";
-    //     std::cout << "\n";
-    // }
+        std::cout << "Gradient B: ";
+        for (float g : B->get_grad()) std::cout << g << " ";
+        std::cout << "\n";
+    }
 
     // std::cout << "--------------Multiplication-------------" << std::endl;
     // {

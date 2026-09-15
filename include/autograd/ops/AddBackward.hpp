@@ -1,15 +1,17 @@
 #pragma once
 #include "autograd/BackwardNode.hpp"
 #include <memory>
+#include "vector"
 
 class Tensor;
 
 class AddBackward: public BackwardNode{
     public:
-        AddBackward(std::shared_ptr<const Tensor> pA, std::shared_ptr<const Tensor>pB, std::shared_ptr<std::vector<float>> rG){
+        AddBackward(std::shared_ptr<const Tensor> pA, std::shared_ptr<const Tensor>pB, std::shared_ptr<std::vector<float>> rG, std::vector<size_t> resultShape){
             parentA_=pA;
             parentB_=pB;
             result_grad_=rG;
+            result_shape_=resultShape;
         }
         // AddBackward is an abstract class till it implements override
         void apply(const std::vector<float>& incoming_grad) override;
@@ -21,5 +23,6 @@ class AddBackward: public BackwardNode{
         std::shared_ptr<const Tensor> parentA_;
         std::shared_ptr<const Tensor> parentB_;
         std::shared_ptr<std::vector<float>> result_grad_;
+        std::vector<size_t> result_shape_;
 };
 

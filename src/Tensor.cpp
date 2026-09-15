@@ -150,7 +150,7 @@ std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
         for (int i=0; i<this->data_.size();i++){
             result->data_[i]=this->data_[i]+other->data_[i];
         }
-        auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
+        auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_, result->shape_);
         result->grad_fn_=node;
         result->requires_grad_=true;
         return result;
@@ -189,7 +189,7 @@ std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
         result->data_[flat_index_res]=this->data_[flat_index_this]+other->data_[flat_index_others];
 
     }while(increment_index(idx,res_shape));   
-    auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_);
+    auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_,result->shape_);
     result->grad_fn_=node;
     result->requires_grad_=true;
     return result;
@@ -705,7 +705,7 @@ size_t Tensor::flat_index(std::vector<size_t>index) const{
 // for broadcasting n dimensional array (2,3,4)+(4) we should be able to broadcast
 // it should pad its shape (1,1,4) and its strides we calculate as well
 
-std::vector<size_t> Tensor::pad_shape(std::vector<size_t> shape, size_t target_length){
+std::vector<size_t> Tensor::pad_shape(std::vector<size_t> shape, size_t target_length)const{
 
     std::vector<size_t> copy= shape;
     for (int i=target_length-shape.size()-1;i>=0;i--){
@@ -714,7 +714,7 @@ std::vector<size_t> Tensor::pad_shape(std::vector<size_t> shape, size_t target_l
     return copy;
 }
 
-std::vector<size_t> Tensor::pad_strides(std::vector<size_t> shape, std::vector<size_t> strides, size_t target_length){
+std::vector<size_t> Tensor::pad_strides(std::vector<size_t> shape, std::vector<size_t> strides, size_t target_length) const{
     std::vector<size_t> copy=strides;
     // pad dimensiosn that have been stretched as 0
     for (int i=target_length-shape.size()-1;i>=0;i--){
@@ -732,5 +732,6 @@ std::vector<size_t> Tensor::pad_strides(std::vector<size_t> shape, std::vector<s
 }
 
 
-
-
+std::vector<size_t>Tensor::get_strides()const{
+    return this->strides_;
+}

@@ -14,6 +14,7 @@ Linear::Linear(size_t in_features, size_t out_features){
     bias_= std::make_shared<Tensor>(std::vector<size_t>{1,out_features});
 
     weight_->randomize(input_features_);
+    
     weight_->set_requires_grad(true);
     bias_->set_requires_grad(true);
 

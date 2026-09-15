@@ -19,7 +19,7 @@ void MSEBackward::apply(const std::vector<float>& incoming_grad){
 }
 
 
-std::vector<std::shared_ptr< const Tensor>> MSEBackward::get_parents(){
+std::vector<std::shared_ptr<const Tensor>> MSEBackward::get_parents(){
     return {parentA_,target_};
 }
 

@@ -6,7 +6,7 @@ class Tensor;
 
 class SoftmaxBackward: public BackwardNode{
     public:
-    SoftmaxBackward(std::shared_ptr<Tensor> pA, std::shared_ptr<std::vector<float>>softmaxProb, std::shared_ptr<std::vector<float>> rG, std::shared_ptr<Tensor>target){
+    SoftmaxBackward(std::shared_ptr<const Tensor> pA, std::shared_ptr<std::vector<float>>softmaxProb, std::shared_ptr<std::vector<float>> rG, std::shared_ptr<Tensor>target){
         parentA_=pA;
         result_grad_=rG;
         softmax_prob_=softmaxProb;
@@ -19,7 +19,7 @@ class SoftmaxBackward: public BackwardNode{
 
 
     private:
-    std::shared_ptr<Tensor> parentA_;
+    std::shared_ptr<const Tensor> parentA_;
     std::shared_ptr<std::vector<float>> result_grad_;
     std::shared_ptr<std::vector<float>> softmax_prob_;
     std::shared_ptr<Tensor> target_;

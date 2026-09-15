@@ -81,7 +81,7 @@ void MatmulBackward::apply(const std::vector<float>& incoming_grad){
 
 
 
-std::vector<std::shared_ptr<const Tensor>> MatmulBackward::get_parents(){
+std::vector<std::shared_ptr< const Tensor>> MatmulBackward::get_parents(){
     return {this->parentA_, this->parentB_};
 }
 

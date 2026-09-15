@@ -17,6 +17,8 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     float get(int r, int c) const;
     float get(std::vector<size_t> index) const;
 
+    std::vector<size_t> get_strides()const;
+
     float operator()(int r, int c) const;
 
     void set_stride();
@@ -68,8 +70,8 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
 
     size_t flat_index(std::vector<size_t> index) const;
 
-    std::vector<size_t> pad_shape(std::vector<size_t> shape, size_t target_length);
-    std::vector<size_t> pad_strides(std::vector<size_t> strides, std::vector<size_t>shape, size_t target_length);
+    std::vector<size_t> pad_shape(std::vector<size_t> shape, size_t target_length)const;
+    std::vector<size_t> pad_strides(std::vector<size_t> strides, std::vector<size_t>shape, size_t target_length)const;
 
     private:
     std::vector<float> data_;
