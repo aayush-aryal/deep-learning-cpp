@@ -194,7 +194,6 @@ std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
     result->requires_grad_=true;
     return result;
 }
-
 std::ostream& operator<<(std::ostream& os,const Tensor& t){
     // overload << so it knows how to print tensors
     os << "Shape (";
@@ -227,40 +226,190 @@ void Tensor::randomize(size_t input){
     std::mt19937 generator(rd());
     float stdev=std::sqrt(2.0f/input);
     std::normal_distribution<float> distribution(0.0f,stdev);
-    int total=shape_[0]*shape_[1];
+    int total=1;
+    for (int i=0; i<this->shape_.size();i++){
+        total*=shape_[i];
+    }
+
     for (int i=0; i<total;i++){
         data_[i]=distribution(generator);
     }
 }
 
-std::shared_ptr<Tensor> Tensor::matmul(std::shared_ptr<Tensor> other) const{
-    // matrix a can be multiplied with matrix b if
-    // column of matrix A must be equal to row of Matrix B
-    if (this->shape_[1]!=other->shape_[0]){
-        throw std::runtime_error("Cannot multiply matrices because dimension mismatch");
+// std::shared_ptr<Tensor> Tensor::matmul(std::shared_ptr<Tensor> other) const{
+//     // matrix a can be multiplied with matrix b if
+//     // column of matrix A must be equal to row of Matrix B
+//     if (this->shape_[1]!=other->shape_[0]){
+//         throw std::runtime_error("Cannot multiply matrices because dimension mismatch");
+//     }
+
+//     // resulting matrix will be (Rows of A, Columns of B)
+
+//     std::vector<size_t>result_shape={this->shape_[0],other->shape_[1]};
+//     auto result_tensor=std::make_shared<Tensor>(result_shape);
+//     for (int r=0; r<this->shape_[0]; r++){
+//         for(int c=0; c<other->shape_[1];c++){
+//             float dotProduct=0.0f;
+//             for (int k=0;k<this->shape_[1];k++){
+//                 dotProduct+=(*this)(r,k)*(*other)(k,c);
+//             }
+//             result_tensor->set(r,c,dotProduct);   
+//         }
+//     }
+
+//     if (this->requires_grad_|| other->requires_grad_){
+//             auto node=std::make_shared<MatmulBackward>(this->shared_from_this(),other,result_tensor->grad_);
+//             result_tensor->grad_fn_=node;
+//             result_tensor->requires_grad_=true;
+//         }
+        
+//     return result_tensor;
+// }
+
+std::vector<size_t>compute_strides_with_shape(std::vector<size_t> shape){
+    std::vector<size_t> strides;
+    size_t acc_stride=1;
+
+    for (int i=shape.size()-1;i>=0;i--){
+        strides.insert(strides.begin(),acc_stride);
+        acc_stride=shape[i]*acc_stride;
     }
 
-    // resulting matrix will be (Rows of A, Columns of B)
+    return strides;
 
-    std::vector<size_t>result_shape={this->shape_[0],other->shape_[1]};
-    auto result_tensor=std::make_shared<Tensor>(result_shape);
-    for (int r=0; r<this->shape_[0]; r++){
-        for(int c=0; c<other->shape_[1];c++){
-            float dotProduct=0.0f;
-            for (int k=0;k<this->shape_[1];k++){
-                dotProduct+=(*this)(r,k)*(*other)(k,c);
-            }
-            result_tensor->set(r,c,dotProduct);   
+}
+
+
+std::shared_ptr<Tensor> Tensor::matmul(std::shared_ptr<Tensor> other){
+    // implement matrix multiplication for n-dimensional arrays
+    // if th inner dimensions do not match then you cannot multiply them
+    // the core is always the last 2 dimension multiplication
+    // which part of the inner most matrices we multiply with each other depends on the outer dimensions and all of their comvination
+    
+
+    // first of all we need the shape of final res
+    std::vector<size_t> res_shape;
+
+    // if 1d matrix given it should still work, we can pad another dimension to the shape if it is
+     bool this_1d= this->shape_.size()==1;
+     bool other_1d= other->shape_.size()==1;
+
+     std::vector<size_t> norm_this=this->shape_;
+     std::vector<size_t> norm_other=other->shape_;
+
+     // we guarantee atleast a 2d matrix with this
+
+     if (this_1d) norm_this=this_1d?std::vector<size_t>{1,this->shape_[0]}:this->shape_ ;
+     if (other_1d) norm_other=other_1d?std::vector<size_t>{other->shape_[0],1}:other->shape_;
+
+
+     // m*k matrix multiplied by p*n matrix k must equal p 
+
+     // now we can pad both tensors 
+    size_t target_length= std::max(norm_this.size(),norm_other.size());
+
+     std::vector<size_t> this_shape_padded= this->pad_shape(norm_this,target_length);
+     std::vector<size_t> other_shape_padded=other->pad_shape(norm_other,target_length);
+
+     
+
+     std::vector<size_t> this_strides_padded=this->pad_strides(norm_this,this_1d?compute_strides_with_shape(norm_this):this->strides_,target_length);
+     std::vector<size_t> other_strides_padded=other->pad_strides(norm_other,other_1d?compute_strides_with_shape(norm_other):other->strides_,target_length);
+
+
+
+
+
+    size_t k= this_shape_padded[target_length-1];
+    size_t m= this_shape_padded[target_length-2];
+
+    size_t n= other_shape_padded[target_length-1];
+    size_t p= other_shape_padded[target_length-2];
+
+    if (k!=p){
+        throw std::invalid_argument("Incompatible shapes for matrix multiplication");
+     }
+
+
+     // now check the padded dimensions if any dont match or oen of them arent 1 
+     std::vector<size_t> broadcast_dim;
+
+     for (int i=0;i<target_length-2;i++){
+        if (this_shape_padded[i]!=other_shape_padded[i] && (this_shape_padded[i]!=1  && other_shape_padded[i]!=1)){
+            throw std::invalid_argument("Incompatible shapes for matrix multiplication");
         }
-    }
+        res_shape.push_back(std::max(this_shape_padded[i],other_shape_padded[i]));
+        broadcast_dim.push_back(std::max(this_shape_padded[i],other_shape_padded[i]));
+     }
+     // res shape must include the innermost dimensions as well that we established 
+     res_shape.push_back(m);
+     res_shape.push_back(n);
+     
+
+     // now we know the res shape create a res tensor 
+     auto res_tensor=std::make_shared<Tensor>(res_shape);
+
+    
+     std::vector<size_t> idx(broadcast_dim.size(),0);
+     // now we index over everything and do 2d matrix multiplication and save it on the result
+     
+     // since to get correct index the size of idx and size of padded strides dont match we can append 0,0 so it matches
+     // which would give us the top left of whichever matrix we are looking for then we can use that as an offset to get to the correct 2d matrix m,n spot
+
+     do{
+    
+     std::vector<size_t> full_idx= idx;
+     full_idx.insert(full_idx.end(),{0,0});
+
+     int base_offset_this= get_correct_index(full_idx,this_strides_padded);
+     int base_offset_other= get_correct_index(full_idx,other_strides_padded);
+     int base_offset_res= get_correct_index(full_idx,res_tensor->strides_);
+
+        for (int i=0; i<m; i++){
+            for (int j=0; j<n; j++){
+                float dotProduct=0.0f;
+                int row_strides_res=res_tensor->strides_[target_length-2];
+                int col_strides_res=res_tensor->strides_[target_length-1];
+                for (int kk=0; kk<p;kk++){
+                   dotProduct+=this->data_[base_offset_this+i*this_strides_padded[target_length-2]+kk*this_strides_padded[target_length-1]]*other->data_[base_offset_other+kk*other_strides_padded[target_length-2]+j*other_strides_padded[target_length-1]];
+                }
+                res_tensor->data_[base_offset_res+i*row_strides_res+j*col_strides_res]=dotProduct;
+            }
+        }
+     }while (increment_index(idx,broadcast_dim));
+
+     // todo: connect backward node , squeeze dimensions if we extended it originally
+     // note i need to handle erasing both 1d dimensions 
+     // for squeezing dimensions 
+
+
+    // now loop through each of the outermost dimensions
+     // take every combination 
+     if (this_1d && other_1d){
+        res_shape.erase(res_shape.begin()+target_length-1);
+        res_shape.erase(res_shape.begin()+target_length-2);
+     }
+     else if (this_1d){
+        // that means that n has been expanded to (1,n)
+        // this means the padded this has a target_length-2 position that i have to drop
+        res_shape.erase(res_shape.begin()+target_length-2);
+    
+     }
+     else if (other_1d){
+        //that neans that n has been expanded to (n,1)
+        // drop the last dimension and then recalculate strides for it?
+        res_shape.erase(res_shape.begin()+target_length-1);
+     }
+     std::vector<size_t> final_strides=compute_strides_with_shape(res_shape);
+     res_tensor->strides_=final_strides;
+     res_tensor->shape_=res_shape;
 
     if (this->requires_grad_|| other->requires_grad_){
-            auto node=std::make_shared<MatmulBackward>(this->shared_from_this(),other,result_tensor->grad_);
-            result_tensor->grad_fn_=node;
-            result_tensor->requires_grad_=true;
-        }
-        
-    return result_tensor;
+            auto node=std::make_shared<MatmulBackward>(this->shared_from_this(),other,res_tensor->grad_);
+            res_tensor->grad_fn_=node;
+            res_tensor->requires_grad_=true;
+    }
+     return res_tensor;
 }
 
 
@@ -529,6 +678,9 @@ std::vector<size_t>Tensor::compute_strides(){
     }
     return strides;
 }
+
+
+
 
 void Tensor::set_stride(){
     std::vector<size_t>strides=this->compute_strides();

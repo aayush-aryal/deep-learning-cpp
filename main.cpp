@@ -23,19 +23,32 @@ int main() {
         t2->set({1}, 1.0);
         auto res= *(t1->add(t2));
         std::cout << res << std::endl;
+
+
+        auto t3= std::make_shared<Tensor>(std::vector<size_t>{2,2,3});
+        t3->set({0,0,1},4.0);
+        res=*(t3->add(t1));
+        std::cout<<res<<std::endl;
+
     }
 
-    // std::cout << "--------------Matmul-------------" << std::endl;
-    // {
-    //     auto t1 = std::make_shared<Tensor>(std::vector<size_t>{2, 3});
-    //     auto t3 = std::make_shared<Tensor>(std::vector<size_t>{3, 2});
-    //     t1->randomize();
-    //     t3->randomize();
+    std::cout << "--------------Matmul-------------" << std::endl;
+    {
+        auto t1 = std::make_shared<Tensor>(std::vector<size_t>{1,2, 3});
+        auto t3 = std::make_shared<Tensor>(std::vector<size_t>{2,3, 2});
+        t1->randomize();
+        t3->randomize();
 
-    //     std::cout << *t1 << std::endl;
-    //     std::cout << *t3 << std::endl;
-    //     std::cout << *(t3->matmul(t1));
-    // }
+        std::cout << *t1 << std::endl;
+        std::cout << *t3 << std::endl;
+        std::cout << *(t3->matmul(t1));
+
+
+        auto t4= std::make_shared<Tensor>(std::vector<size_t>{3});
+        t4->randomize();
+        std::cout << *(t1->matmul(t4));
+
+    }
 
     // std::cout << "--------------Broadcasting-------------" << std::endl;
     // {

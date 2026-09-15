@@ -23,7 +23,7 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     std::shared_ptr<Tensor> add(std::shared_ptr<Tensor>other);
     friend std::ostream& operator<< (std::ostream& os,const Tensor& t);
     void randomize(size_t input=1);
-    std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>a) const;
+    std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>a);
     std::shared_ptr<Tensor> relu();
 
     std::shared_ptr<Tensor> softmax_crossentropy(std::shared_ptr<Tensor> target);
