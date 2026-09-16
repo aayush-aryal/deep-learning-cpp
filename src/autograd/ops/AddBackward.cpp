@@ -61,11 +61,6 @@ void AddBackward::apply(const std::vector<float>& incoming_grad){
 
         std::vector<size_t> result_strides= compute_strides_with_shape(result_shape_);
 
-        std::cout << "padded_stride_parentB: ";
-for (auto s : padded_stride_parentB) std::cout << s << " ";
-std::cout << std::endl;
-std::cout << "gradB size: " << gradB.size() << std::endl;
-
         do{
             // accumulate in the parents gradient?
             size_t flat_index_parentA= get_correct_index(idx,padded_stride_parentA);

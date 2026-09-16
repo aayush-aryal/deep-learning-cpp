@@ -405,7 +405,7 @@ std::shared_ptr<Tensor> Tensor::matmul(std::shared_ptr<Tensor> other){
      res_tensor->shape_=res_shape;
 
     if (this->requires_grad_|| other->requires_grad_){
-            auto node=std::make_shared<MatmulBackward>(this->shared_from_this(),other,res_tensor->grad_);
+            auto node=std::make_shared<MatmulBackward>(this->shared_from_this(),other,res_tensor->grad_,res_shape);
             res_tensor->grad_fn_=node;
             res_tensor->requires_grad_=true;
     }
