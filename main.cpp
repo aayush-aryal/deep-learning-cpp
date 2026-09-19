@@ -92,34 +92,62 @@ int main() {
         std::cout << "\n";
     }
 
-    // std::cout << "--------------Multiplication-------------" << std::endl;
-    // {
-    //     auto t5 = std::make_shared<Tensor>(std::vector<size_t>{3, 2});
-    //     auto t6 = std::make_shared<Tensor>(std::vector<size_t>{2, 5});
+    std::cout << "--------------Matmul backward-------------" << std::endl;
+    {
+        auto t5 = std::make_shared<Tensor>(std::vector<size_t>{3, 2});
+        auto t6 = std::make_shared<Tensor>(std::vector<size_t>{2, 5});
 
-    //     t5->set_requires_grad(true);
-    //     t6->set_requires_grad(true);
-    //     t5->randomize();
-    //     t6->randomize();
+        t5->set_requires_grad(true);
+        t6->set_requires_grad(true);
+        t5->randomize();
+        t6->randomize();
 
-    //     auto t7 = t5->matmul(t6);
-    //     t7->backward();
+        auto t7 = t5->matmul(t6);
+        t7->backward();
 
-    //     std::cout << *t7;
-    //     std::cout << "Gradient T7: ";
-    //     for (float g : t7->get_grad()) std::cout << g << " ";
-    //     std::cout << "\n";
+        std::cout << *t7;
+        std::cout << "Gradient T7: ";
+        for (float g : t7->get_grad()) std::cout << g << " ";
+        std::cout << "\n";
 
-    //     std::cout << *t5;
-    //     std::cout << "Gradient T5: ";
-    //     for (float g : t5->get_grad()) std::cout << g << " ";
-    //     std::cout << "\n";
+        std::cout << *t5;
+        std::cout << "Gradient T5: ";
+        for (float g : t5->get_grad()) std::cout << g << " ";
+        std::cout << "\n";
 
-    //     std::cout << *t6;
-    //     std::cout << "Gradient T6: ";
-    //     for (float g : t6->get_grad()) std::cout << g << " ";
-    //     std::cout << "\n";
-    // }
+        std::cout << *t6;
+        std::cout << "Gradient T6: ";
+        for (float g : t6->get_grad()) std::cout << g << " ";
+        std::cout << "\n";
+    }
+    {
+        std::cout<< "--------Testing gradients---------"<< std::endl;
+
+        auto t1=std::make_shared<Tensor>(std::vector<size_t>{1,2,2,3});
+        auto t2= std::make_shared<Tensor>(std::vector<size_t>{3});
+        auto t3= std::make_shared<Tensor>(std::vector<size_t>{1,1,2,3});
+        auto t4= std::make_shared<Tensor>(std::vector<size_t>{3,2,2,3});
+
+        t1->randomize();
+        t2->randomize();
+        t3->randomize();
+        t4->randomize();
+
+        t1->set_requires_grad(true);
+        t2->set_requires_grad(true);
+        t3->set_requires_grad(true);
+        t4->set_requires_grad(true);
+
+
+        std::cout<<"Gradients working correctly for addition broadcast"<< gradient_check_add(t1,t2)<< std::endl;
+
+        
+        std::cout<<"Gradients working correctly for addition"<< gradient_check_add(t4,t3)<< std::endl;
+
+
+        
+
+    }
 
     // std::cout << "--------------Relu Autograd-------------" << std::endl;
     // {

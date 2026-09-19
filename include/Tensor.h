@@ -31,6 +31,8 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     std::shared_ptr<Tensor> softmax_crossentropy(std::shared_ptr<Tensor> target);
     std::shared_ptr<std::vector<float>> softmax(std::shared_ptr<Tensor> target);
 
+    void zero_grad();
+
     std::vector<float>&get_grad()const{
         return *grad_;
     };

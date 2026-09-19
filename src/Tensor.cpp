@@ -735,3 +735,9 @@ std::vector<size_t> Tensor::pad_strides(std::vector<size_t> shape, std::vector<s
 std::vector<size_t>Tensor::get_strides()const{
     return this->strides_;
 }
+
+void Tensor::zero_grad(){
+    for (int i=0; i<this->grad_->size();i++){
+        this->get_grad()[i]=0.0f;
+    }
+}

@@ -56,34 +56,34 @@ std::vector<float> matrix_multiply(const std::vector<float>& ma,const std::vecto
 }
 
 
-void MatmulBackward::apply(const std::vector<float>& incoming_grad){
-    // get parent gradient 
-    std::vector<float>& gradA= this->parentA_->get_grad();
-    std::vector<float>& gradB=this->parentB_->get_grad();
+// void MatmulBackward::apply(const std::vector<float>& incoming_grad){
+//     // get parent gradient 
+//     std::vector<float>& gradA= this->parentA_->get_grad();
+//     std::vector<float>& gradB=this->parentB_->get_grad();
 
 
 
 
-    // get actual data since it is multiplied by incoming gradients for backprop
-    const std::vector<float>& dataA=this->parentA_->get_data();
-    const std::vector<float>& dataB= this-> parentB_->get_data();
+//     // get actual data since it is multiplied by incoming gradients for backprop
+//     const std::vector<float>& dataA=this->parentA_->get_data();
+//     const std::vector<float>& dataB= this-> parentB_->get_data();
 
-    std::vector<size_t> shapeA = this->parentA_->get_shape();
-    std::vector<size_t> shapeB = this->parentB_->get_shape();
-    std::vector<size_t> shape_incoming = {shapeA[0], shapeB[1]}; // M x P
+//     std::vector<size_t> shapeA = this->parentA_->get_shape();
+//     std::vector<size_t> shapeB = this->parentB_->get_shape();
+//     std::vector<size_t> shape_incoming = {shapeA[0], shapeB[1]}; // M x P
 
 
-    // now we need to know how to restribute incoming gradient in betweeen the parent gradient for matrix multiplication
-    std::vector<float> resB=matrix_multiply(dataA,incoming_grad,shapeA,shape_incoming,true,false);
-    std::vector<float> resA=matrix_multiply(incoming_grad,dataB,shape_incoming,shapeB,false,true);
+//     // now we need to know how to restribute incoming gradient in betweeen the parent gradient for matrix multiplication
+//     std::vector<float> resB=matrix_multiply(dataA,incoming_grad,shapeA,shape_incoming,true,false);
+//     std::vector<float> resA=matrix_multiply(incoming_grad,dataB,shape_incoming,shapeB,false,true);
 
-    for (size_t i=0; i<gradA.size();i++){
-        gradA[i]+=resA[i];
-    }
-    for (size_t i=0; i<gradB.size();i++){
-        gradB[i]+=resB[i];
-    }
-}
+//     for (size_t i=0; i<gradA.size();i++){
+//         gradA[i]+=resA[i];
+//     }
+//     for (size_t i=0; i<gradB.size();i++){
+//         gradB[i]+=resB[i];
+//     }
+// }
 
 
 // good thing we have matrix multiplication helper 
@@ -112,7 +112,7 @@ void MatmulBackward::apply(const std::vector<float>& incoming_grad){
     // now that we padded shapes the strides that the parents have are of diff size so we need to pad the strides as well
     std::vector<size_t> padded_strides_shapeA= this->parentA_->pad_strides(shapeA, this->parentA_->get_strides(),target_length);
     std::vector<size_t> padded_strides_shapeB= this->parentB_->pad_strides(shapeB, this->parentB_->get_strides(),target_length);
-    std::vector<size_t> res_strides=compute_strides_with_shape(resultShape_);
+    std::vector<size_t> res_strides=compute_strides_with_shape(result_shape_);
 
 
     // get teh last 2 dimensions since that is where we will be doing our multiplication
@@ -135,10 +135,14 @@ void MatmulBackward::apply(const std::vector<float>& incoming_grad){
     }
     
     std::vector<size_t> idx(broadcast_dim.size(),0);
+
+
     do{
-        size_t flat_index_res=get_correct_index(idx, res_strides);
-        size_t flat_index_parentA= get_correct_index(idx,padded_strides_shapeA);
-        size_t flat_index_parentB= get_correct_index(idx,padded_strides_shapeB);
+        std::vector<size_t> full_idx=idx;
+        full_idx.insert(full_idx.end(),{0,0});
+        size_t flat_index_res=get_correct_index(full_idx, res_strides);
+        size_t flat_index_parentA= get_correct_index(full_idx,padded_strides_shapeA);
+        size_t flat_index_parentB= get_correct_index(full_idx,padded_strides_shapeB);
 
         // now loop through the last two dimensions and matrix multiply the transpose to get the correct shape
 
