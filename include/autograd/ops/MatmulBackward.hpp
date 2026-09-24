@@ -3,9 +3,23 @@
 #include <memory>
 #include "vector"
 
+/**
+ * @brief Backwards Node for tensor multiplication
+ * 
+ * Propagates gradients from the result of an a multiplication operation
+ * to its parent tensors, including any necessary broadcasting.
+ */
 class MatmulBackward: public BackwardNode{
 
     public:
+    /**
+         * @brief Creates a backward node for a tensor multiplication operation.
+         *
+         * @param pA First tensor involved in the multiplication.
+         * @param pB Second tensor involved in the multiplication.
+         * @param rG Gradient associated with the result tensor.
+         * @param resultShape Shape of the result tensor.
+    */  
     MatmulBackward(std::shared_ptr<const Tensor>pA, std::shared_ptr<const Tensor>pB,std::shared_ptr<std::vector<float>> rG, std::vector<size_t> rS){
         parentA_=pA;
         parentB_=pB;

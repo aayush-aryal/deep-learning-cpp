@@ -19,3 +19,6 @@ run_engine
 # IDE folders (Uncomment if you use them)
 .vscode/
 # .idea/
+
+#Documentation 
+/docs

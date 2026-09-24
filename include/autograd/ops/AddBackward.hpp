@@ -5,8 +5,22 @@
 
 class Tensor;
 
+/**
+ * @brief Backward operation for tensor addition.
+ *
+ * Propagates gradients from the result of an addition operation
+ * to its parent tensors, including any necessary broadcasting.
+ */
 class AddBackward: public BackwardNode{
     public:
+        /**
+         * @brief Creates a backward node for a tensor addition operation.
+         *
+         * @param pA First tensor involved in the addition.
+         * @param pB Second tensor involved in the addition.
+         * @param rG Gradient associated with the result tensor.
+         * @param resultShape Shape of the result tensor.
+         */
         AddBackward(std::shared_ptr<const Tensor> pA, std::shared_ptr<const Tensor>pB, std::shared_ptr<std::vector<float>> rG, std::vector<size_t> resultShape){
             parentA_=pA;
             parentB_=pB;

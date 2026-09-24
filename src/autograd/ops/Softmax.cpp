@@ -18,9 +18,9 @@ void SoftmaxBackward::apply(const std::vector<float>& incoming_grad){
     std::vector<float>& gradA=this->parentA_->get_grad();
     std::vector<float>& target= this->target_->get_data_ref();
 
-  
 
     for (size_t i=0; i<gradA.size();i++){
+        // keep in mind the get_shape() and how this changes when you want to use this for transformers
         gradA[i]+=((*this->softmax_prob_)[i]-target[i])/target_->get_shape()[0];
     }
 }
