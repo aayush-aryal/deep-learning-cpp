@@ -22,3 +22,6 @@ run_engine
 
 #Documentation 
 /docs
+
+#Rust 
+/bindings/rust/target/

@@ -21,10 +21,9 @@ add_executable(run_engine
                 src/nn/Linear.cpp
                 src/nn/Relu.cpp
                 src/nn/Sequential.cpp
-
                 src/Dataloader.cpp
                 src/utility.cpp
-                
+                src/capi.cpp
                 )
 
 
@@ -38,3 +37,13 @@ if(DOXYGEN_FOUND)
         VERBATIM
     )
 endif()
+
+add_library(dl_capi STATIC 
+src/capi.cpp 
+src/Tensor.cpp 
+src/autograd/ops/AddBackward.cpp 
+src/autograd/ops/MatmulBackward.cpp
+)
+target_include_directories(dl_capi PUBLIC include)
+target_compile_options(dl_capi PRIVATE -fno-sanitize=address)
+target_link_options(dl_capi PRIVATE -fno-sanitize=address)

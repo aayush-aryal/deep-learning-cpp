@@ -83,6 +83,9 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     */
     std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>a);
 
+
+    std::shared_ptr<Tensor> multiply(std::shared_ptr<Tensor>other);
+
     /**
      * @brief Performs Relu activation function for all of the tensor values for this tensor.
      */
@@ -181,6 +184,11 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
      * @return Vector storing the new padded strides.
      */
     std::vector<size_t> pad_strides(std::vector<size_t> strides, std::vector<size_t>shape, size_t target_length)const;
+
+    //elementwise operations needed to build transformers
+    std::shared_ptr<Tensor> subtract(std::shared_ptr<Tensor>other);
+
+    std::shared_ptr<Tensor> negate();
 
     private:
     /// @brief  stores the actual tensor data

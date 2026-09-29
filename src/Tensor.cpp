@@ -194,6 +194,84 @@ std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
     result->requires_grad_=true;
     return result;
 }
+
+
+
+std::shared_ptr<Tensor> Tensor::multiply(std::shared_ptr<Tensor>other){
+    if (this->shape_==other->shape_){
+        auto result= std::make_shared<Tensor>(this->shape_);
+        for (int i=0; i<this->data_.size();i++){
+            result->data_[i]=this->data_[i]*other->data_[i];
+        }
+        // change this backward node later
+        auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_, result->shape_);
+        result->grad_fn_=node;
+        result->requires_grad_=true;
+        return result;
+    }
+
+    size_t target_length= std::max(this->shape_.size(),other->shape_.size());
+
+
+    std::vector<size_t> padded_shape_this= this->pad_shape(this->shape_,target_length);
+    std::vector<size_t> padded_shape_other= other->pad_shape(other->shape_,target_length);
+
+    // pad both of their strides accordingly as well
+
+    std::vector<size_t> padded_strides_this=this->pad_strides(this->shape_,this->strides_,target_length);
+    std::vector<size_t> padded_strides_other= other->pad_strides(other->shape_,other->strides_,target_length);
+
+    std::vector<size_t> res_shape;
+    for (int j=0; j<target_length;j++){
+        if (padded_shape_this[j]!=padded_shape_other[j] && (padded_shape_other[j]!=1 && padded_shape_this[j]!=1)){
+             throw std::runtime_error("Cannot multiply: dimensions mismatch and not broadcastable");
+        }
+        if (padded_shape_this[j]>=padded_shape_other[j]){
+            res_shape.push_back(padded_shape_this[j]);
+        }else{
+            res_shape.push_back(padded_shape_other[j]);
+        }
+    }
+
+    auto result= std::make_shared<Tensor>(res_shape);   
+    std::vector<size_t> idx(res_shape.size(),0);
+    do{
+            size_t flat_index_this=get_correct_index(idx,padded_shape_this);
+            size_t flat_index_other=get_correct_index(idx,padded_shape_other);
+            size_t flat_index_res= get_correct_index(idx,res_shape);
+
+            result->data_[flat_index_res]=this->data_[flat_index_this]*other->data_[flat_index_other];
+
+        }while(increment_index(idx,res_shape));
+    
+
+    // if there is a requires gradient check
+    auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_,result->shape_);
+    result->grad_fn_=node;
+    result->requires_grad_=true;
+    return result;
+}
+
+
+std::shared_ptr<Tensor> Tensor::subtract(std::shared_ptr<Tensor>other){
+    return this->add(other->negate());   
+}
+
+std::shared_ptr<Tensor> Tensor::negate(){
+    // need to negate all teh data for teh forward pass
+    auto result=std::make_shared<Tensor>(this->shape_);
+    if (this->requires_grad_){
+        result->set_requires_grad(true);
+        // then set the backwards node
+    }
+
+    for(int i=0; i<result->data_.size();i++){
+        result->data_[i]=-this->data_[i];
+    }
+    return result;  
+}
+
+
 std::ostream& operator<<(std::ostream& os,const Tensor& t){
     // overload << so it knows how to print tensors
     os << "Shape (";
@@ -315,8 +393,6 @@ std::shared_ptr<Tensor> Tensor::matmul(std::shared_ptr<Tensor> other){
 
      std::vector<size_t> this_strides_padded=this->pad_strides(norm_this,this_1d?compute_strides_with_shape(norm_this):this->strides_,target_length);
      std::vector<size_t> other_strides_padded=other->pad_strides(norm_other,other_1d?compute_strides_with_shape(norm_other):other->strides_,target_length);
-
-
 
 
 
