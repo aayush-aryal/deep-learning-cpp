@@ -30,16 +30,26 @@ fn main(){
     //     println!("Result: {:?}", out_buffer);
     // }
 
-    let mut a=Tensor::new(&[1,2,2]);
+    let mut a=Tensor::new(&[2,2,2]);
     a.set(&[0,1,1],1.0);
+    a.set_requires_grad(true);
 
-    let mut b= Tensor::new(&[1]);
-    b.set(&[0],1.0);
+    a.set(&[1,1,1],1.0);
+    let mut b= Tensor::new(&[2,1]);
+    b.set(&[0,0],1.0);
+    b.set_requires_grad(true);
 
-    let c= a.add(&b);
 
     println!("{}",a);
     println!("{}",b);
+
+
+    let mut c= a.matmul(&b);
+    c.set_requires_grad(true);
     println!("{}",c);
+
+    c.backward();
+
+    println!("Result: {:?}", a.get_grad());
 
 }

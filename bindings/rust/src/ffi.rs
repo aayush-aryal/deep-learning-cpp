@@ -8,7 +8,14 @@ unsafe extern "C"{
     pub fn tensor_get_shape(t: *mut c_void, out_shape: *mut usize, out_len:usize); 
     pub fn tensor_set_elem(t: *mut c_void, idx: *const usize, idx_len:usize, value:f32);
     pub fn tensor_size(t: *mut c_void)->usize;
+    pub fn tensor_backward(t:*mut c_void);
+    pub fn tensor_set_requires_grad(t: *mut c_void, requires:bool);
+    pub fn tensor_get_grad(t: *mut c_void, out_buffer:*mut f32, out_len:usize);
+
+
+
     pub fn tensor_matmul(a: *mut c_void , b: *mut c_void)->*mut c_void;
     pub fn tensor_addition(a: *mut c_void , b: *mut c_void)->*mut c_void;
+
 
 }

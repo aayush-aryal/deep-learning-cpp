@@ -42,13 +42,6 @@ impl Tensor{
         out_buffer
     }
 
-    // pub fn get(&self, idx:&[usize])->f32{
-    //     unsafe{
-    //         tensor_get
-    //     }
-
-    // }
-
     pub fn print_shape(&self){
         print!("Shape: [");
         for i in 0..self.shape.len(){
@@ -91,6 +84,24 @@ impl Tensor{
     pub fn matmul(&self, other:&Tensor)->Tensor{
         let ptr= unsafe{tensor_matmul(self.ptr,other.ptr)};
         Tensor::from_ptr(ptr)
+    }
+
+
+    pub fn backward(&mut self){
+        unsafe{tensor_backward(self.ptr)};
+    }
+
+    pub fn set_requires_grad(&mut self, requires:bool){
+        unsafe{tensor_set_requires_grad(self.ptr,requires)};
+    }
+
+    pub fn get_grad(&self)->Vec<f32>{
+        let out_len=self.len;
+        let mut out_buffer=vec![0.0f32;out_len];
+        unsafe{
+            tensor_get_grad(self.ptr,out_buffer.as_mut_ptr(),out_len);
+        }
+        out_buffer
     }
 }
 
