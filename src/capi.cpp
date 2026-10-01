@@ -22,10 +22,32 @@ extern "C"{
         for (size_t i = 0; i < len; i++) data_ref[i] = data[i];
     }
 
+    void tensor_set_elem(TensorHandle t, size_t* idx, size_t idx_len, float value){
+        auto* tensor_ptr= static_cast<std::shared_ptr<Tensor>*>(t);
+        std::vector<size_t>idx_vec(idx, idx+idx_len);
+        (*tensor_ptr)->set(idx_vec,value);
+    }
+
     void tensor_get_data(TensorHandle t, float* out_buffer, size_t len){
         auto* tensor_ptr= static_cast<std::shared_ptr<Tensor>*>(t);
         const auto& data= (*tensor_ptr)->get_data();
         for(size_t i=0; i<len; i++) out_buffer[i]= data[i];
+    }
+
+    void tensor_get_shape(TensorHandle t, size_t* out_shape, size_t out_len){
+        auto* tensor_ptr=static_cast<std::shared_ptr<Tensor>*>(t);
+        auto shape= (*tensor_ptr)->get_shape();
+        for (int i=0; i<out_len;i++)out_shape[i]=shape[i];
+    }
+
+    size_t tensor_ndim(TensorHandle t){
+        auto* tensor_ptr= static_cast<std::shared_ptr<Tensor>*>(t);
+        return (*tensor_ptr)->get_shape().size();
+    }
+
+    size_t tensor_size(TensorHandle t){
+        auto* tensor_ptr= static_cast<std::shared_ptr<Tensor>*>(t);
+        return (*tensor_ptr)->get_data().size();  
     }
 
     TensorHandle tensor_relu(TensorHandle t){
@@ -56,6 +78,20 @@ extern "C"{
         return static_cast<void*>(handle);
     }
 
+    void tensor_backward(TensorHandle t){
+        auto* tensor_ptr= static_cast<std::shared_ptr<Tensor>*>(t);
+        (*tensor_ptr)->backward();
+    }
 
+    void tensor_set_requires_grad(TensorHandle t, bool requires){
+        auto* tensor_ptr= static_cast<std::shared_ptr<Tensor>*>(t);
+        (*tensor_ptr)->set_requires_grad(requires);
+    }
+
+    void tensor_get_grad(TensorHandle t, float* out_buffer, size_t out_len){
+        auto* tensor_ptr= static_cast<std::shared_ptr<Tensor>*>(t);
+        std::vector<float>& grad= (*tensor_ptr)->get_grad();
+        for (int i=0; i<out_len;i++){out_buffer[i]=grad[i];}
+    }
 
 }

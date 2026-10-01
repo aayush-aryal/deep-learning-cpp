@@ -769,6 +769,9 @@ size_t Tensor::flat_index(std::vector<size_t>index) const{
     if (index.size()!= this->shape_.size()){
         throw std::invalid_argument("flat_index: index size does not match tensor rank");
     }
+    for (size_t i = 0; i < index.size(); i++) {
+    if (index[i] >= this->shape_[i]) throw std::out_of_range("index out of bounds for this axis");
+}
     // now each stride* each index gives you the correct flat index of the element you are looking for 
     size_t correct_index=0;
     for (int i=0; i<index.size();i++){
