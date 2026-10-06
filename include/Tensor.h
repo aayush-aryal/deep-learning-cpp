@@ -189,6 +189,11 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     std::shared_ptr<Tensor> subtract(std::shared_ptr<Tensor>other);
 
     std::shared_ptr<Tensor> negate();
+    std::shared_ptr<Tensor> reciprocal();
+    std::shared_ptr<Tensor> divide(std::shared_ptr<Tensor>other);
+    std::shared_ptr<Tensor>exp();
+    std::shared_ptr<Tensor> sqrt();
+    std::shared_ptr<Tensor> log();
 
     private:
     /// @brief  stores the actual tensor data

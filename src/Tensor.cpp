@@ -9,6 +9,12 @@
 #include "autograd/ops/ReluBackward.hpp"
 #include "autograd/ops/MSEBackward.hpp"
 #include "autograd/ops/SoftmaxBackward.hpp"
+#include "autograd/ops/NegateBackward.hpp"
+#include "autograd/ops/ReciprocalBackward.hpp"
+#include "autograd/ops/MultiplyBackward.hpp"
+#include "autograd/ops/ExpBackward.hpp"
+#include "autograd/ops/SqrtBackward.hpp"
+#include "autograd/ops/LogBackward.hpp"
 #include <memory>
 #include <assert.h>
 
@@ -203,11 +209,14 @@ std::shared_ptr<Tensor> Tensor::multiply(std::shared_ptr<Tensor>other){
         for (int i=0; i<this->data_.size();i++){
             result->data_[i]=this->data_[i]*other->data_[i];
         }
-        // change this backward node later
-        auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_, result->shape_);
-        result->grad_fn_=node;
-        result->requires_grad_=true;
+
+        if (this->requires_grad_|| other->requires_grad_){
+                auto node=std::make_shared<MultiplyBackward>(this->shared_from_this(),other,result->grad_, result->shape_);
+                result->grad_fn_=node;
+                result->requires_grad_=true;
+        }
         return result;
+
     }
 
     size_t target_length= std::max(this->shape_.size(),other->shape_.size());
@@ -236,9 +245,9 @@ std::shared_ptr<Tensor> Tensor::multiply(std::shared_ptr<Tensor>other){
     auto result= std::make_shared<Tensor>(res_shape);   
     std::vector<size_t> idx(res_shape.size(),0);
     do{
-            size_t flat_index_this=get_correct_index(idx,padded_shape_this);
-            size_t flat_index_other=get_correct_index(idx,padded_shape_other);
-            size_t flat_index_res= get_correct_index(idx,res_shape);
+            size_t flat_index_this=get_correct_index(idx,padded_strides_this);
+            size_t flat_index_other=get_correct_index(idx,padded_strides_other);
+            size_t flat_index_res= get_correct_index(idx,result->get_strides());
 
             result->data_[flat_index_res]=this->data_[flat_index_this]*other->data_[flat_index_other];
 
@@ -246,9 +255,12 @@ std::shared_ptr<Tensor> Tensor::multiply(std::shared_ptr<Tensor>other){
     
 
     // if there is a requires gradient check
-    auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_,result->shape_);
-    result->grad_fn_=node;
-    result->requires_grad_=true;
+    if (this->requires_grad_|| other->requires_grad_){
+            auto node=std::make_shared<MultiplyBackward>(this->shared_from_this(),other,result->grad_,result->shape_);
+            result->grad_fn_=node;
+            result->requires_grad_=true;
+
+    }
     return result;
 }
 
@@ -258,11 +270,10 @@ std::shared_ptr<Tensor> Tensor::subtract(std::shared_ptr<Tensor>other){
 }
 
 std::shared_ptr<Tensor> Tensor::negate(){
-    // need to negate all teh data for teh forward pass
     auto result=std::make_shared<Tensor>(this->shape_);
     if (this->requires_grad_){
+        result->grad_fn_=std::make_shared<NegateBackward>(this->shared_from_this(),result->grad_);
         result->set_requires_grad(true);
-        // then set the backwards node
     }
 
     for(int i=0; i<result->data_.size();i++){
@@ -271,6 +282,70 @@ std::shared_ptr<Tensor> Tensor::negate(){
     return result;  
 }
 
+
+
+std::shared_ptr<Tensor> Tensor::reciprocal(){
+    auto result= std::make_shared<Tensor>(this->shape_);
+    for (int i=0; i<result->data_.size();i++){
+        result->data_[i]=1.0f/this->data_[i];
+
+    }
+    if (this->requires_grad_){
+        result->grad_fn_=std::make_shared<ReciprocalBackward>(this->shared_from_this(),result->grad_);
+        result->set_requires_grad(true);
+    }
+    return result;
+}
+
+std::shared_ptr<Tensor> Tensor::divide(std::shared_ptr<Tensor> other){
+    return this->multiply(other->reciprocal());
+
+}
+
+
+std::shared_ptr<Tensor> Tensor::exp(){
+    auto result= std::make_shared<Tensor>(this->shape_);
+
+    for (int i=0; i<result->data_.size();i++){
+        result->data_[i]=std::exp(this->data_[i]);
+    }
+
+    if (this->requires_grad_){
+        result->grad_fn_=std::make_shared<ExpBackward>(this->shared_from_this(),result->grad_);
+        result->set_requires_grad(true);
+    }
+    return result;
+}
+
+
+std::shared_ptr<Tensor> Tensor::sqrt(){
+    auto result= std::make_shared<Tensor>(this->shape_);
+
+    for (int i=0;i<result->data_.size();i++){
+        result->data_[i]=std::sqrt(this->data_[i]);
+    }
+
+    if (this->requires_grad_){
+        result->grad_fn_=std::make_shared<SqrtBackward>(this->shared_from_this(),result->grad_);
+        result->set_requires_grad(true);
+    }
+    return result;
+}
+
+
+std::shared_ptr<Tensor> Tensor::log(){
+    auto result= std::make_shared<Tensor>(this->shape_);
+
+    for (int i=0; i<result->data_.size();i++){
+        result->data_[i]= std::log(this->data_[i]);
+    }
+    if (this->requires_grad_){
+        result->grad_fn_=std::make_shared<LogBackward>(this->shared_from_this(),result->grad_);
+        result->set_requires_grad(true);
+    } 
+
+    return result;
+}
 
 std::ostream& operator<<(std::ostream& os,const Tensor& t){
     // overload << so it knows how to print tensors

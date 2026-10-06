@@ -120,34 +120,45 @@ int main() {
         for (float g : t6->get_grad()) std::cout << g << " ";
         std::cout << "\n";
     }
-    {
-        std::cout<< "--------Testing gradients---------"<< std::endl;
+{
+    std::cout << "-------- Gradient checks --------" << std::endl;
 
-        auto t1=std::make_shared<Tensor>(std::vector<size_t>{1,2,2,3});
-        auto t2= std::make_shared<Tensor>(std::vector<size_t>{3});
-        auto t3= std::make_shared<Tensor>(std::vector<size_t>{1,1,2,3});
-        auto t4= std::make_shared<Tensor>(std::vector<size_t>{3,2,2,3});
+    // fresh tensor with positive, well-behaved values
+    auto make = [](std::vector<size_t> shape){
+        auto t = std::make_shared<Tensor>(shape);
+        auto& d = t->get_data_ref();
+        for (size_t i = 0; i < d.size(); i++) d[i] = 0.5f + 0.3f * (i % 7) + 0.05f * i;
+        t->set_requires_grad(true);
+        return t;
+    };
+    auto report = [](const std::string& name, bool ok){
+        std::cout << (ok ? "[PASS] " : "[FAIL] ") << name << std::endl;
+    };
 
-        t1->randomize();
-        t2->randomize();
-        t3->randomize();
-        t4->randomize();
+    // unary
+    report("negate",     gradient_check_unary(make({2,3}), [](auto x){ return x->negate(); }));
+    report("exp",        gradient_check_unary(make({2,3}), [](auto x){ return x->exp(); }));
+    report("sqrt",       gradient_check_unary(make({2,3}), [](auto x){ return x->sqrt(); }));
+    report("reciprocal", gradient_check_unary(make({2,3}), [](auto x){ return x->reciprocal(); }));
+    report("log",        gradient_check_unary(make({2,3}), [](auto x){ return x->log(); }));
 
-        t1->set_requires_grad(true);
-        t2->set_requires_grad(true);
-        t3->set_requires_grad(true);
-        t4->set_requires_grad(true);
+    // binary, same shape
+    report("add",      gradient_check_add(make({2,3}), make({2,3})));
+    report("subtract", gradient_check_subtract(make({2,3}), make({2,3})));
+    report("multiply", gradient_check_multiply(make({2,3}), make({2,3})));
+    report("divide",   gradient_check_divide(make({2,3}), make({2,3})));
 
+    // binary, broadcasting
+    report("add broadcast",      gradient_check_add(make({2,2,3}), make({3})));
+    report("subtract broadcast", gradient_check_subtract(make({2,2,3}), make({3})));
+    report("multiply broadcast", gradient_check_multiply(make({2,2,3}), make({1,3})));
+    report("divide broadcast",   gradient_check_divide(make({2,2,3}), make({1,3})));
 
-        std::cout<<"Gradients working correctly for addition broadcast"<< gradient_check_add(t1,t2)<< std::endl;
-
-        
-        std::cout<<"Gradients working correctly for addition"<< gradient_check_add(t4,t3)<< std::endl;
-
-
-        
-
-    }
+    // matmul
+    report("matmul 2D",      gradient_check_matmul(make({3,4}),   make({4,2})));
+    report("matmul batched", gradient_check_matmul(make({2,3,4}), make({2,4,2})));
+    report("matmul broadcast", gradient_check_matmul(make({2,3,4}), make({4,2})));
+}
 
     // std::cout << "--------------Relu Autograd-------------" << std::endl;
     // {

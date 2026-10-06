@@ -160,3 +160,35 @@ bool gradient_check_matmul(std::shared_ptr<Tensor> t1, std::shared_ptr<Tensor> t
     bool b_ok = check_one_tensor(t2, [&](){ return t1->matmul(t2); }, eps, tolerance);
     return a_ok && b_ok;
 }
+
+
+bool gradient_check_unary(std::shared_ptr<Tensor> t,
+                          std::function<std::shared_ptr<Tensor>(std::shared_ptr<Tensor>)> op,
+                          float eps, float tolerance){
+    return check_one_tensor(t, [&](){ return op(t); }, eps, tolerance);
+}
+
+
+bool gradient_check_subtract(std::shared_ptr<Tensor> t1, std::shared_ptr<Tensor> t2, float eps, float tolerance){
+    bool a_ok = check_one_tensor(t1, [&](){ return t1->subtract(t2); }, eps, tolerance);
+    t1->zero_grad();
+    t2->zero_grad();
+    bool b_ok = check_one_tensor(t2, [&](){ return t1->subtract(t2); }, eps, tolerance);
+    return a_ok && b_ok;
+}
+
+bool gradient_check_divide(std::shared_ptr<Tensor> t1, std::shared_ptr<Tensor> t2, float eps, float tolerance){
+    bool a_ok = check_one_tensor(t1, [&](){ return t1->divide(t2); }, eps, tolerance);
+    t1->zero_grad();
+    t2->zero_grad();
+    bool b_ok = check_one_tensor(t2, [&](){ return t1->divide(t2); }, eps, tolerance);
+    return a_ok && b_ok;
+}
+
+bool gradient_check_multiply(std::shared_ptr<Tensor> t1, std::shared_ptr<Tensor> t2, float eps, float tolerance){
+    bool a_ok = check_one_tensor(t1, [&](){ return t1->multiply(t2); }, eps, tolerance);
+    t1->zero_grad();
+    t2->zero_grad();
+    bool b_ok = check_one_tensor(t2, [&](){ return t1->multiply(t2); }, eps, tolerance);
+    return a_ok && b_ok;
+}

@@ -17,6 +17,12 @@ add_executable(run_engine
                 src/autograd/ops/ReluBackward.cpp
                 src/autograd/ops/MSEBackward.cpp
                 src/autograd/ops/Softmax.cpp
+                src/autograd/ops/ExpBackward.cpp 
+                src/autograd/ops/LogBackward.cpp
+                src/autograd/ops/NegateBackward.cpp 
+                src/autograd/ops/ReciprocalBackward.cpp 
+                src/autograd/ops/SqrtBackward.cpp
+                src/autograd/ops/MultiplyBackward.cpp
                 src/SGD.cpp
                 src/nn/Linear.cpp
                 src/nn/Relu.cpp
@@ -24,6 +30,7 @@ add_executable(run_engine
                 src/Dataloader.cpp
                 src/utility.cpp
                 src/capi.cpp
+
                 )
 
 
