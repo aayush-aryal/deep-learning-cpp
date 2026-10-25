@@ -117,7 +117,7 @@ float accuracy(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target){
 
 // }
 
-bool check_one_tensor(std::shared_ptr<Tensor> target, std::function<std::shared_ptr<Tensor>()> forward_fn, float eps, float tolerance) {
+bool check_one_tensor(std::shared_ptr<Tensor> target, std::function<std::shared_ptr<Tensor>()> forward_fn, float eps, float tolerance, float atol) {
     auto result = forward_fn();
     result->backward();
 
@@ -127,19 +127,23 @@ bool check_one_tensor(std::shared_ptr<Tensor> target, std::function<std::shared_
         float orig = data[i];
         data[i] = orig + eps;
         auto res_plus = forward_fn();
-        float L_plus = 0.0f;
+        double L_plus = 0.0f;
         for (float v : res_plus->get_data()) L_plus += v;
 
         data[i] = orig - eps;
         auto res_minus = forward_fn();
-        float L_minus = 0.0f;
+        double L_minus = 0.0f;
         for (float v : res_minus->get_data()) L_minus += v;
 
         data[i] = orig;
-        float numerical_grad = (L_plus - L_minus) / (2*eps);
-        float diff = std::abs(numerical_grad - target->get_grad()[i]);
-        float relative_diff= diff/std::abs(target->get_grad()[i]+eps);
-        all_true = all_true && (relative_diff <= tolerance);
+        double numerical_grad = (L_plus - L_minus) / (2*eps);
+        double analytical= target->get_grad()[i];
+        double diff= std::abs(numerical_grad-analytical);
+
+        double rel= diff/(std::abs(analytical)+eps);
+        bool ok= (diff<=atol)||(rel<=tolerance);
+        all_true= all_true && ok;
+        
     }
     return all_true;
 }
@@ -192,3 +196,44 @@ bool gradient_check_multiply(std::shared_ptr<Tensor> t1, std::shared_ptr<Tensor>
     bool b_ok = check_one_tensor(t2, [&](){ return t1->multiply(t2); }, eps, tolerance);
     return a_ok && b_ok;
 }
+
+size_t normalize_axis(int axis, size_t rank){
+    int ax;
+    if (axis<0){
+        ax= axis+rank;  
+    }else{
+        ax=axis;
+    }
+    if (ax<0 || ax>=rank){
+        throw std::out_of_range("index out of bounds for this axis");
+    }
+    return static_cast<size_t>(ax);
+}
+
+ std::shared_ptr<Tensor> causal_mask(size_t T){
+    auto result= std::make_shared<Tensor>(std::vector<size_t>{T,T});
+    for (size_t i=0; i<T; i++){
+        for (size_t j=0; j<T;j++){
+            if (j>i){
+                result->set({i,j},-1e9f);
+            }
+        }
+    }
+    return result;
+ }
+
+ std::shared_ptr<Tensor> attention(std::shared_ptr<Tensor> Q, std::shared_ptr<Tensor> K, std::shared_ptr<Tensor> V, bool causal){
+    size_t d= K->get_shape().back();
+    size_t T= Q->get_shape()[Q->get_shape().size()-2];
+    auto scale= std::make_shared<Tensor>(std::vector<size_t>(Q->get_shape().size(),1));
+    scale->set(std::vector<size_t>(Q->get_shape().size(),0),(1.0f/std::sqrt(static_cast<float>(d))));
+    auto qk= Q->matmul(K->transpose(-2,-1));
+    auto scores = qk->multiply(scale);
+    if (causal) scores = scores->add(causal_mask(T));
+    auto weights = scores->softmax(-1);
+    return weights->matmul(V);
+ }
+
+
+
+

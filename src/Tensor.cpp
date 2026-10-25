@@ -15,8 +15,14 @@
 #include "autograd/ops/ExpBackward.hpp"
 #include "autograd/ops/SqrtBackward.hpp"
 #include "autograd/ops/LogBackward.hpp"
+#include "autograd/ops/AxisSumBackward.hpp"
+#include "autograd/ops/PermuteBackward.hpp"
+#include "autograd/ops/ReshapeBackward.hpp"
 #include <memory>
 #include <assert.h>
+#include <limits>
+#include <algorithm>
+#include "utility.h"
 
 
 Tensor::Tensor(std::vector<size_t> shape){
@@ -150,19 +156,15 @@ std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
     // if all of their dimensions match
     // if their dimensions are equal or one of them is 1
     // if they are equal
+    std::shared_ptr<Tensor> result;
     if (this->shape_== other->shape_){
         // we can just sum individual flat index for each tensor
-        auto result= std::make_shared<Tensor>(this->shape_);
+        result= std::make_shared<Tensor>(this->shape_);
         for (int i=0; i<this->data_.size();i++){
             result->data_[i]=this->data_[i]+other->data_[i];
         }
-        auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_, result->shape_);
-        result->grad_fn_=node;
-        result->requires_grad_=true;
-        return result;
-    }
-
-    // if not loop through each dimension if they are 1 or equal do sum
+    }else{
+        // if not loop through each dimension if they are 1 or equal do sum
     size_t target_length=std::max(this->shape_.size(),other->shape_.size());
     std::vector<size_t> padded_shape_this=this->pad_shape(this->shape_,target_length);
     std::vector<size_t> padded_shape_other=other->pad_shape(other->shape_,target_length);
@@ -183,7 +185,7 @@ std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
             res_shape.push_back(padded_shape_this[i]);
         }
     }
-    auto result=std::make_shared<Tensor>(res_shape);
+    result=std::make_shared<Tensor>(res_shape);
 
     // now use this loop to actually broadcast
     std::vector<size_t> idx(res_shape.size(),0);
@@ -195,9 +197,14 @@ std::shared_ptr<Tensor> Tensor::add(std::shared_ptr<Tensor> other){
         result->data_[flat_index_res]=this->data_[flat_index_this]+other->data_[flat_index_others];
 
     }while(increment_index(idx,res_shape));   
-    auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_,result->shape_);
-    result->grad_fn_=node;
-    result->requires_grad_=true;
+    }
+
+    if (this->requires_grad_|| other->requires_grad_){
+            auto node=std::make_shared<AddBackward>(this->shared_from_this(),other,result->grad_,result->shape_);
+            result->grad_fn_=node;
+            result->requires_grad_=true;
+
+    }
     return result;
 }
 
@@ -259,7 +266,6 @@ std::shared_ptr<Tensor> Tensor::multiply(std::shared_ptr<Tensor>other){
             auto node=std::make_shared<MultiplyBackward>(this->shared_from_this(),other,result->grad_,result->shape_);
             result->grad_fn_=node;
             result->requires_grad_=true;
-
     }
     return result;
 }
@@ -346,6 +352,164 @@ std::shared_ptr<Tensor> Tensor::log(){
 
     return result;
 }
+
+
+
+std::shared_ptr<Tensor> Tensor::axiswise_sum(int axis){
+    size_t ax = normalize_axis(axis, this->shape_.size());
+    std::vector<size_t> new_shape=this->shape_;
+    new_shape[ax]=1;
+
+    // create a new vector with the reduced axis
+    auto result= std::make_shared<Tensor>(new_shape);
+    // loop over the original dimensions?
+    std::vector<size_t>idx(this->shape_.size(),0);
+    do{
+        size_t flat_index_this= get_correct_index(idx,this->strides_);
+        std::vector<size_t> out_idx=idx; 
+        out_idx[ax]=0;
+        size_t flat_index_result= get_correct_index(out_idx,result->strides_);
+        result->data_[flat_index_result]+=this->data_[flat_index_this];
+    }while(increment_index(idx,this->shape_));
+
+    if (this->requires_grad_){
+        result->grad_fn_= std::make_shared<AxisSumBackward>(this->shared_from_this(),result->grad_,ax,result->strides_);
+        result->set_requires_grad(true);
+    }
+
+    return result;
+}
+
+
+std::shared_ptr<Tensor> Tensor::axiswise_max(int axis){
+    size_t ax = normalize_axis(axis, this->shape_.size());
+
+    std::vector<size_t> new_shape= this->shape_;
+    new_shape[ax]=1;
+
+    auto result= std::make_shared<Tensor>(new_shape);
+    std::fill(result->data_.begin(),result->data_.end(),-std::numeric_limits<float>::infinity());
+
+    std::vector<size_t>idx(this->shape_.size(),0);
+    do{
+        size_t flat_index_this= get_correct_index(idx,this->strides_);
+        std::vector<size_t> out_idx=idx;
+        out_idx[ax]=0;
+        size_t flat_index_result= get_correct_index(out_idx,result->strides_);
+        result->data_[flat_index_result]=std::max(result->data_[flat_index_result],this->data_[flat_index_this]);
+    }while(increment_index(idx,this->shape_));
+
+    return result;
+}
+
+
+std::shared_ptr<Tensor> Tensor::softmax(int axis){
+    auto m= this->axiswise_max(axis);
+    auto e= this->subtract(m)->exp();
+    auto s=e->axiswise_sum(axis);
+    return e->divide(s);
+}
+
+std::shared_ptr<Tensor> Tensor::permute(const std::vector<int>& perm){
+    std::vector<size_t> normalized_perm;
+    size_t tensor_shape_len= this->shape_.size();
+    if (perm.size()!=tensor_shape_len){
+        throw std::invalid_argument("permutation size and tensor size do not match!");
+    }
+    for (int p:perm){
+        normalized_perm.push_back(normalize_axis(p,tensor_shape_len));
+    }
+
+    std::unordered_set<size_t> seen;
+    for (size_t p:normalized_perm){
+        if (seen.find(p)!=seen.end()){
+            throw std::invalid_argument("perm contains a repeated axis");
+        }
+        seen.insert(p);
+    }
+    // now that we know the perm is valid create a new shape
+    std::vector<size_t> new_shape;
+
+    for (size_t n:normalized_perm){
+        new_shape.push_back(this->shape_[n]);
+    }
+
+    auto result= std::make_shared<Tensor>(new_shape);
+    std::vector<size_t>idx(tensor_shape_len,0);
+    do{
+        size_t flat_index_result= get_correct_index(idx,result->strides_);
+        std::vector<size_t> in_idx(tensor_shape_len);
+        for (size_t i=0; i<tensor_shape_len;i++){
+            in_idx[normalized_perm[i]]=idx[i];
+        }
+        size_t flat_index_this= get_correct_index(in_idx, this->strides_);
+        result->data_[flat_index_result]=this->data_[flat_index_this];
+    }while(increment_index(idx, new_shape));
+    if (this->requires_grad_){
+        auto node= std::make_shared<PermuteBackward>(this->shared_from_this(),result->grad_,normalized_perm,result->get_shape());
+        result->requires_grad_=true;
+        result->grad_fn_=node;
+    }
+    return result;
+}
+
+
+std::shared_ptr<Tensor> Tensor::transpose(int a, int b){
+
+    size_t rank=this->shape_.size();
+    size_t norm_a= normalize_axis(a,rank);
+    size_t norm_b = normalize_axis(b, rank);
+
+    std::vector<int>perm(rank);
+    std::iota(perm.begin(),perm.end(),0);
+    std::swap(perm[norm_a],perm[norm_b]);
+    return this->permute(perm);
+
+}
+
+
+std::shared_ptr<Tensor> Tensor::reshape(const std::vector<int>& new_shape){
+    size_t total = this->data_.size();
+    int neg_pos = -1;
+    size_t prod_shape = 1;
+    std::vector<size_t> final_shape(new_shape.size(), 0);
+
+    for (size_t i = 0; i < new_shape.size(); i++){
+        if (new_shape[i] == -1){
+            if (neg_pos != -1){
+                throw std::invalid_argument("reshape: more than one -1 in new shape");
+            }
+            neg_pos = static_cast<int>(i);
+        } else {
+            if (new_shape[i] <= 0){
+                throw std::invalid_argument("reshape: dimensions must be positive or -1");
+            }
+            prod_shape *= static_cast<size_t>(new_shape[i]);
+            final_shape[i] = static_cast<size_t>(new_shape[i]);
+        }
+    }
+
+    if (neg_pos != -1){
+        if (total % prod_shape != 0){
+            throw std::invalid_argument("reshape: element count not divisible by known dimensions");
+        }
+        final_shape[neg_pos] = total / prod_shape;
+    } else if (prod_shape != total){
+        throw std::invalid_argument("reshape: element count mismatch");
+    }
+
+    auto result = std::make_shared<Tensor>(final_shape);
+    result->data_ = this->data_;
+
+    if (this->requires_grad_){
+        auto node= std::make_shared<ReshapeBackward>(this->shared_from_this(),result->grad_);
+        result->grad_fn_=node;
+        result->set_requires_grad(true);
+    }
+    return result;
+}
+
+
 
 std::ostream& operator<<(std::ostream& os,const Tensor& t){
     // overload << so it knows how to print tensors
@@ -645,35 +809,35 @@ std::shared_ptr<Tensor> Tensor::softmax_crossentropy(std::shared_ptr<Tensor>targ
     }
     return loss_tensor;
 }
-std::shared_ptr<std::vector<float>> Tensor::softmax(std::shared_ptr<Tensor>target){
-    auto softmax_prob=std::make_shared<std::vector<float>>();
-    (*softmax_prob).resize(this->shape_[0]* this->shape_[1]);
-    float total=0.0f;
+// std::shared_ptr<std::vector<float>> Tensor::softmax(std::shared_ptr<Tensor>target){
+//     auto softmax_prob=std::make_shared<std::vector<float>>();
+//     (*softmax_prob).resize(this->shape_[0]* this->shape_[1]);
+//     float total=0.0f;
 
-        // exp(x - max) / sum(exp(xi - max))
-        // = exp(x) * exp(-max) / (sum(exp(xi)) * exp(-max))
-        // = exp(x) / sum(exp(xi))
+//         // exp(x - max) / sum(exp(xi - max))
+//         // = exp(x) * exp(-max) / (sum(exp(xi)) * exp(-max))
+//         // = exp(x) / sum(exp(xi))
 
-        // we subtract by max of the given row in order to prevent overflow due to exp of large numbers
-    for (size_t r=0; r<this->shape_[0];r++){
-        total=0.0f;
-        float maximum=this->get(r,0);
-        for (size_t c=0; c<this->shape_[1];c++){
-            if (this->get(r,c)>maximum){
-                maximum=this->get(r,c);
-            }     
-        } 
-        for (size_t c=0; c<this->shape_[1];c++){
-            total+=(std::exp(this->get(r,c)-maximum));   
-        }
-        for (size_t c=0; c<this->shape_[1];c++){
-            float curr_val=std::exp(this->get(r,c)-maximum);
-            size_t index= (r*this->shape_[1])+c;
-            (*softmax_prob)[index]=curr_val/total;
-        }
-    }
-    return softmax_prob;
-}
+//         // we subtract by max of the given row in order to prevent overflow due to exp of large numbers
+//     for (size_t r=0; r<this->shape_[0];r++){
+//         total=0.0f;
+//         float maximum=this->get(r,0);
+//         for (size_t c=0; c<this->shape_[1];c++){
+//             if (this->get(r,c)>maximum){
+//                 maximum=this->get(r,c);
+//             }     
+//         } 
+//         for (size_t c=0; c<this->shape_[1];c++){
+//             total+=(std::exp(this->get(r,c)-maximum));   
+//         }
+//         for (size_t c=0; c<this->shape_[1];c++){
+//             float curr_val=std::exp(this->get(r,c)-maximum);
+//             size_t index= (r*this->shape_[1])+c;
+//             (*softmax_prob)[index]=curr_val/total;
+//         }
+//     }
+//     return softmax_prob;
+// }
 
 void Tensor::backward(){
     // if its not created through a mathematical operation return

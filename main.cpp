@@ -6,6 +6,7 @@
 #include "nn/Relu.h"
 #include "nn/Sequential.h"
 #include "nn/Module.h"
+#include "nn/MultiHeadAttention.h"
 #include "vector"
 #include "Dataloader.h"
 #include "utility.h"
@@ -159,6 +160,317 @@ int main() {
     report("matmul batched", gradient_check_matmul(make({2,3,4}), make({2,4,2})));
     report("matmul broadcast", gradient_check_matmul(make({2,3,4}), make({4,2})));
 }
+{
+    std::cout<<"Axiswise sum"<< std::endl;
+    auto t1= std::make_shared<Tensor>(std::vector<size_t>{2,2,3});
+    t1->randomize();
+    t1->set_requires_grad(true);
+    auto result= t1->multiply(t1)->axiswise_sum(2);
+    std::cout<<*t1;
+    std::cout<<*result;
+
+    result->backward();
+        for (float g : t1->get_grad()) std::cout << g << " ";
+        std::cout << "\n";
+
+    for (int axis : {0, 1, 2, -1}) {
+    auto t = std::make_shared<Tensor>(std::vector<size_t>{2,2,3});
+    t->randomize();
+    t->set_requires_grad(true);
+    auto fwd = [&]() { return t->multiply(t->axiswise_sum(axis)); };
+    std::cout << "axis " << axis << ": "
+              << (check_one_tensor(t, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+}
+}
+
+{
+    std::cout << "Axiswise max" << std::endl;
+
+    std::vector<float> data={1,5,3,-5,-2,-9};
+    auto t= std::make_shared<Tensor>(std::vector<size_t>{2,3});
+    std::vector<float>& t_ref=t->get_data_ref();
+    t_ref=data;
+
+    auto m1 = t->axiswise_max(1);    // expect shape (2x1): 5 -2
+    auto m0 = t->axiswise_max(0);    // expect shape (1x3): 1 5 3
+    auto mn = t->axiswise_max(-1);   // should match m1
+
+    std::cout << *t << *m1 << *m0 << *mn;
+}
+{
+    std::cout<<"Softmax function"<<std::endl;
+    std::vector<float> data={1,5,3,-5,-2,-9};
+    auto t= std::make_shared<Tensor>(std::vector<size_t>{2,3});
+    t->set_requires_grad(true);
+    std::vector<float>& t_ref=t->get_data_ref();
+    t_ref=data;
+
+    auto sm = t->softmax(-1);
+    std::cout << *sm;                         // row 0 expect ~0.090 0.245 0.665
+    std::cout << *sm->axiswise_sum(-1);
+
+    
+    for (int axis:{-1,0,1}){
+        auto t2= std::make_shared<Tensor>(std::vector<size_t>{2,3,4});
+        t2->randomize();
+        t2->set_requires_grad(true);
+
+
+        auto w=  std::make_shared<Tensor>(std::vector<size_t>{2,3,4});
+
+        w->randomize();
+        auto fwd=[&](){return t2->softmax(axis)->multiply(w);};
+
+        std::cout<<"softmax axis" << axis << ":" 
+        << (check_one_tensor(t,fwd,1e-3f,2e-2f)? "PASS":"FAIL")
+        << std::endl;
+    }
+    auto big = std::make_shared<Tensor>(std::vector<size_t>{1, 3});
+    big->get_data_ref() = {1000, 1001, 1002};
+    std::cout << *big->softmax(-1);
+}
+{
+    std::cout<<"Permute"<<std::endl;
+    auto t= std::make_shared<Tensor>(std::vector<size_t>{2,3,4});
+    t->randomize();
+    t->set({1,2,3},23.0);
+    std::vector<int> p{2,0,1};
+    auto t2= t->permute(p);
+    std::cout<<*t2<<std::endl;
+    std::cout << t2->get({3,1,2}) << std::endl;
+
+    std::cout<<"Backward"<<std::endl;
+    std::vector<std::vector<int>> perms = {{1,2,0}, {2,0,1}, {0,2,1}, {-1,0,1}};
+
+    for(auto&p:perms){
+        auto ten=std::make_shared<Tensor>(std::vector<size_t>{2,3,4});
+        ten->randomize();
+        ten->set_requires_grad(true);
+
+        auto permed= ten->permute(p);
+
+        auto w= std::make_shared<Tensor>(permed->get_shape());
+        w->randomize();
+
+        auto fwd=[&](){return ten->permute(p)->multiply(w);};
+        std::cout << "perm (" << p[0] << "," << p[1] << "," << p[2] << "): "
+                  << (check_one_tensor(ten, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL")
+                  << std::endl;
+
+    }
+
+    {
+        std::cout<< "Transpose"<< std::endl;
+        auto m = std::make_shared<Tensor>(std::vector<size_t>{2, 3});
+        m->get_data_ref() = {1, 2, 3, 4, 5, 6};
+        auto mt = m->transpose(0, 1);
+        std::cout<<*mt;
+        auto x = std::make_shared<Tensor>(std::vector<size_t>{2, 4, 3});
+        x->randomize();
+        auto a = x->transpose(-2, -1);
+        auto b = x->transpose(1, 2);
+        std::cout << *a;    // expect Shape (2x3x4)
+        bool same = (a->get_data() == b->get_data()) && (a->get_shape() == b->get_shape());
+        std::cout << "neg vs pos axes: " << (same ? "PASS" : "FAIL") << std::endl;
+
+        auto rt = x->transpose(-2, -1)->transpose(-2, -1);
+        bool rt_ok = (rt->get_data() == x->get_data()) && (rt->get_shape() == x->get_shape());
+        std::cout << "round trip: " << (rt_ok ? "PASS" : "FAIL") << std::endl;
+        auto g = std::make_shared<Tensor>(std::vector<size_t>{2, 4, 3});
+        g->randomize();
+        g->set_requires_grad(true);
+        auto w = std::make_shared<Tensor>(std::vector<size_t>{2, 3, 4});
+        w->randomize();   // constant, no grad
+        auto fwd = [&]() { return g->transpose(-2, -1)->multiply(w); };
+        std::cout << "transpose grad: "
+                << (check_one_tensor(g, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+        
+        try {
+        x->transpose(0, 3);
+        std::cout << "range check: FAIL (no throw)" << std::endl;
+    } catch (const std::out_of_range&) {
+        std::cout << "range check: PASS" << std::endl;
+    }
+    }
+
+    {
+    std::cout << "Attention" << std::endl;
+    size_t d = 3;
+
+    auto Q = std::make_shared<Tensor>(std::vector<size_t>{2,4,3});
+    auto K = std::make_shared<Tensor>(std::vector<size_t>{2,4,3});
+    auto V = std::make_shared<Tensor>(std::vector<size_t>{2,4,3});
+    Q->randomize(); K->randomize(); V->randomize();
+    Q->set_requires_grad(true);
+    K->set_requires_grad(true);
+    V->set_requires_grad(true);
+
+    auto w= std::make_shared<Tensor>(std::vector<size_t>{2,4,3});
+
+
+    w->randomize();
+
+    auto out= attention(Q,K,V);
+    std::cout << "out shape: ";
+    for (size_t s : out->get_shape()) std::cout << s << " ";
+    std::cout << std::endl;
+
+    auto fwd = [&]() { return attention(Q, K, V)->multiply(w); };
+
+    std::cout << "Q: " << (check_one_tensor(Q, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+    Q->zero_grad(); K->zero_grad(); V->zero_grad();
+    std::cout << "K: " << (check_one_tensor(K, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+    Q->zero_grad(); K->zero_grad(); V->zero_grad();
+    std::cout << "V: " << (check_one_tensor(V, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+
+    
+    }
+    {
+        std::cout<<"Causal Mask" <<std::endl;
+        std::cout<<*causal_mask(4);
+    }
+
+    {
+        std::cout<<"Reshape"<< std::endl;
+        t= std::make_shared<Tensor>(std::vector<size_t>{2,3,4});
+        t->randomize();
+        auto t1= t->reshape({2,-1});
+        std::cout<<*t<<std::endl;
+        std::cout<<*t1<<std::endl;
+        auto t2= t1->reshape({2,3,4});
+        std::cout<<*t2<<std::endl;
+
+        // testing backward 
+         auto x = std::make_shared<Tensor>(std::vector<size_t>{2,3,4});
+        x->randomize();
+        x->set_requires_grad(true);
+        auto w = std::make_shared<Tensor>(std::vector<size_t>{6,4});
+        w->randomize();   // constant, no grad
+        auto fwd = [&]() { return x->reshape({6,4})->multiply(w); };
+        std::cout << "reshape grad: "
+                << (check_one_tensor(x, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+
+        // testing split merge
+
+        auto y = std::make_shared<Tensor>(std::vector<size_t>{2,4,6});
+        y->randomize();
+        y->set_requires_grad(true);
+        auto split_merge = [&]() {
+            return y->reshape({2,4,2,-1})
+                    ->permute(std::vector<int>{0,2,1,3})
+                    ->permute(std::vector<int>{0,2,1,3})
+                    ->reshape({2,4,-1});
+        };
+        auto rt = split_merge();
+        std::cout << "split/merge round trip: "
+                << ((rt->get_data() == y->get_data() && rt->get_shape() == y->get_shape()) ? "PASS" : "FAIL")
+                << std::endl;
+
+        auto w2 = std::make_shared<Tensor>(std::vector<size_t>{2,4,6});
+        w2->randomize();
+        auto fwd2 = [&]() { return split_merge()->multiply(w2); };
+        std::cout << "split/merge grad: "
+                << (check_one_tensor(y, fwd2, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+
+        }
+    } 
+    {
+    std::cout << "MultiHeadAttention" << std::endl;
+    const size_t B = 2, T = 4, D = 6;
+
+    auto make_x = [&]() {
+        auto x = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+        x->randomize();
+        x->set_requires_grad(true);
+        return x;
+    };
+    auto w = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+    w->randomize();   // constant, no grad
+
+    // check shape
+    {
+        MultiHeadAttention mha(D, 2);
+        auto out = mha.forward(make_x(), false);
+        std::cout << "shape: ";
+        for (size_t s : out->get_shape()) std::cout << s << " ";
+        std::cout << "(expect 2 4 6)" << std::endl;
+        std::cout << "param count: " << mha.parameters().size() << " (expect 8)" << std::endl;
+    }
+
+    //  d_model (number of features for each token) not divisible by heads must throw
+    try {
+        MultiHeadAttention bad(6, 4);
+        std::cout << "divisibility check: FAIL (no throw)" << std::endl;
+    } catch (const std::invalid_argument&) {
+        std::cout << "divisibility check: PASS" << std::endl;
+    }
+
+    // h=1 should give same output as single headed attention
+    {
+        MultiHeadAttention mha(D, 1);
+        auto x = make_x();
+        auto p = mha.parameters();   // Wq,bq,Wk,bk,Wv,bv,Wo,bo
+        auto Q = x->matmul(p[0])->add(p[1]);
+        auto K = x->matmul(p[2])->add(p[3]);
+        auto V = x->matmul(p[4])->add(p[5]);
+        auto ref = attention(Q, K, V, false)->matmul(p[6])->add(p[7]);
+        auto got = mha.forward(x, false);
+        float maxdiff = 0.0f;
+        for (size_t i = 0; i < ref->get_data().size(); i++)
+            maxdiff = std::max(maxdiff, std::abs(ref->get_data()[i] - got->get_data()[i]));
+        std::cout << "H=1 consistency: " << (maxdiff < 1e-5f ? "PASS" : "FAIL")
+                  << " (maxdiff " << maxdiff << ")" << std::endl;
+    }
+
+    // checking causal false and true with gradient checker
+    for (bool causal : {false, true}) {
+        MultiHeadAttention mha(D, 2);
+        auto x = make_x();
+        auto fwd = [&]() { return mha.forward(x, causal)->multiply(w); };
+        std::cout << "grad x (causal=" << causal << "): "
+                  << (check_one_tensor(x, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+    }
+
+    //  check gradients on each of teh sub vectors
+    const char* names[8] = {"Wq","bq","Wk","bk","Wv","bv","Wo","bo"};
+    for (size_t i = 0; i < 8; i++) {
+        MultiHeadAttention mha(D, 2);
+        auto x = make_x();
+        auto target = mha.parameters()[i];
+        auto fwd = [&]() { return mha.forward(x, false)->multiply(w); };
+        std::cout << "grad " << names[i] << ": "
+                  << (check_one_tensor(target, fwd, 1e-3f, 5e-2f) ? "PASS" : "FAIL") << std::endl;
+    }
+
+    // changing the last token must not affect earlier outputs
+    {
+        MultiHeadAttention mha(D, 2);
+        auto x = make_x();
+        auto out1 = mha.forward(x, true);
+        std::vector<float> before = out1->get_data();   // copy
+
+        std::vector<float>& xd = x->get_data_ref();
+        for (size_t b = 0; b < B; b++)
+            for (size_t d = 0; d < D; d++)
+                xd[b * T * D + (T - 1) * D + d] += 5.0f;   // perturb last token only
+
+        auto out2 = mha.forward(x, true);
+        const std::vector<float>& after = out2->get_data();
+
+        float early_diff = 0.0f, last_diff = 0.0f;
+        for (size_t b = 0; b < B; b++)
+            for (size_t t = 0; t < T; t++)
+                for (size_t d = 0; d < D; d++) {
+                    size_t i = b * T * D + t * D + d;
+                    float diff = std::abs(before[i] - after[i]);
+                    if (t < T - 1) early_diff = std::max(early_diff, diff);
+                    else last_diff = std::max(last_diff, diff);
+                }
+        std::cout << "no-leak: " << (early_diff < 1e-6f ? "PASS" : "FAIL")
+                  << " (early diff " << early_diff << ")" << std::endl;
+        std::cout << "last token did change: " << (last_diff > 1e-3f ? "PASS" : "FAIL") << std::endl;
+    }
+}      
 
     // std::cout << "--------------Relu Autograd-------------" << std::endl;
     // {

@@ -195,6 +195,16 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     std::shared_ptr<Tensor> sqrt();
     std::shared_ptr<Tensor> log();
 
+
+    std::shared_ptr<Tensor> axiswise_sum(int axis);
+    std::shared_ptr<Tensor> axiswise_max(int axis);
+    std::shared_ptr<Tensor> softmax(int axis=-1);
+    std::shared_ptr<Tensor> permute(const std::vector<int>& perm);
+    std::shared_ptr<Tensor> transpose (int a, int b);
+    std::shared_ptr<Tensor> reshape(const std::vector<int>&new_shape);
+
+
+
     private:
     /// @brief  stores the actual tensor data
     std::vector<float> data_;

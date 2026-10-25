@@ -23,14 +23,17 @@ add_executable(run_engine
                 src/autograd/ops/ReciprocalBackward.cpp 
                 src/autograd/ops/SqrtBackward.cpp
                 src/autograd/ops/MultiplyBackward.cpp
+                src/autograd/ops/AxisSumBackward.cpp
+                src/autograd/ops/PermuteBackward.cpp
+                src/autograd/ops/ReshapeBackward.cpp
                 src/SGD.cpp
                 src/nn/Linear.cpp
                 src/nn/Relu.cpp
                 src/nn/Sequential.cpp
+                src/nn/MultiHeadAttention.cpp
                 src/Dataloader.cpp
                 src/utility.cpp
                 src/capi.cpp
-
                 )
 
 
