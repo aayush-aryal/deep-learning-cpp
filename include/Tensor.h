@@ -202,7 +202,7 @@ class Tensor:public std::enable_shared_from_this<Tensor>{
     std::shared_ptr<Tensor> permute(const std::vector<int>& perm);
     std::shared_ptr<Tensor> transpose (int a, int b);
     std::shared_ptr<Tensor> reshape(const std::vector<int>&new_shape);
-
+    std::shared_ptr<Tensor> gather(std::shared_ptr<Tensor> ids);
 
 
     private:

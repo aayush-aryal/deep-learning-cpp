@@ -7,6 +7,8 @@
 #include "nn/Sequential.h"
 #include "nn/Module.h"
 #include "nn/MultiHeadAttention.h"
+#include "nn/LayerNorm.h"
+#include "nn/Embedding.h"
 #include "vector"
 #include "Dataloader.h"
 #include "utility.h"
@@ -470,6 +472,153 @@ int main() {
                   << " (early diff " << early_diff << ")" << std::endl;
         std::cout << "last token did change: " << (last_diff > 1e-3f ? "PASS" : "FAIL") << std::endl;
     }
+    {
+    std::cout << "LayerNorm" << std::endl;
+    const size_t B = 2, T = 4, D = 6;
+
+    // 1. Shape
+    {
+        LayerNorm ln(D);
+        auto x = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+        x->randomize();
+        auto out = ln.forward(x);
+        std::cout << "shape: ";
+        for (size_t s : out->get_shape()) std::cout << s << " ";
+        std::cout << "(expect 2 4 6)" << std::endl;
+        std::cout << "param count: " << ln.parameters().size() << " (expect 2)" << std::endl;
+    }
+
+    // 2. Hand case: [1,2,3,4] -> about [-1.342, -0.447, 0.447, 1.342]
+    {
+        LayerNorm ln(4);
+        auto x = std::make_shared<Tensor>(std::vector<size_t>{1, 1, 4});
+        x->get_data_ref() = {1, 2, 3, 4};
+        auto out = ln.forward(x);
+        std::cout << *out;
+        const std::vector<float> expect = {-1.3416f, -0.4472f, 0.4472f, 1.3416f};
+        float maxdiff = 0.0f;
+        for (size_t i = 0; i < 4; i++)
+            maxdiff = std::max(maxdiff, std::abs(out->get_data()[i] - expect[i]));
+        std::cout << "hand case: " << (maxdiff < 1e-3f ? "PASS" : "FAIL")
+                  << " (maxdiff " << maxdiff << ")" << std::endl;
+    }
+
+    // 3. Row statistics: every token should have mean ~0 and variance ~1
+    {
+        LayerNorm ln(D);
+        auto x = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+        x->randomize();
+        auto out = ln.forward(x);
+        const std::vector<float>& o = out->get_data();
+        float worst_mean = 0.0f, worst_var = 0.0f;
+        for (size_t tok = 0; tok < B * T; tok++) {
+            double m = 0.0, v = 0.0;
+            for (size_t d = 0; d < D; d++) m += o[tok * D + d];
+            m /= D;
+            for (size_t d = 0; d < D; d++) {
+                double c = o[tok * D + d] - m;
+                v += c * c;
+            }
+            v /= D;
+            worst_mean = std::max(worst_mean, (float)std::abs(m));
+            worst_var = std::max(worst_var, (float)std::abs(v - 1.0));
+        }
+        std::cout << "row stats: " << ((worst_mean < 1e-4f && worst_var < 1e-3f) ? "PASS" : "FAIL")
+                  << " (worst |mean| " << worst_mean << ", worst |var-1| " << worst_var << ")" << std::endl;
+    }
+
+    // 4. Constant row: all-equal input must give zeros, not NaN
+    {
+        LayerNorm ln(4);
+        auto x = std::make_shared<Tensor>(std::vector<size_t>{1, 1, 4});
+        x->get_data_ref() = {3, 3, 3, 3};
+        auto out = ln.forward(x);
+        bool ok = true;
+        for (float v : out->get_data())
+            if (std::isnan(v) || std::isinf(v) || std::abs(v) > 1e-4f) ok = false;
+        std::cout << "constant row: " << (ok ? "PASS" : "FAIL") << std::endl;
+    }
+
+    // 5. Gradient checks with a nontrivial loss (plain sum gives ~0 gradients)
+    {
+        auto w = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+        w->randomize();   // constant, no grad
+
+        // on x
+        {
+            LayerNorm ln(D);
+            auto x = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+            x->randomize();
+            x->set_requires_grad(true);
+            auto fwd = [&]() { return ln.forward(x)->multiply(w); };
+            std::cout << "grad x: "
+                      << (check_one_tensor(x, fwd, 1e-2f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+        }
+        // on gamma, then beta (fresh model each time)
+        const char* names[2] = {"gamma", "beta"};
+        for (size_t i = 0; i < 2; i++) {
+            LayerNorm ln(D);
+            auto x = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+            x->randomize();
+            x->set_requires_grad(true);
+            auto target = ln.parameters()[i];
+            auto fwd = [&]() { return ln.forward(x)->multiply(w); };
+            std::cout << "grad " << names[i] << ": "
+                      << (check_one_tensor(target, fwd, 1e-2f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+        }
+    }
+}
+{
+    std::cout << "Gather" << std::endl;
+
+    // ids [2,0,2] should pull rows 2, 0, 2 out of the table
+    auto table = std::make_shared<Tensor>(std::vector<size_t>{4, 2});
+    table->get_data_ref() = {0, 1, 2, 3, 4, 5, 6, 7};
+    table->set_requires_grad(true);
+    auto ids = std::make_shared<Tensor>(std::vector<size_t>{1, 3});
+    ids->get_data_ref() = {2, 0, 2};
+
+    auto out = table->gather(ids);
+    std::cout << *out;   // expect shape (1x3x2): 4 5 0 1 4 5
+
+    // row 2 is used twice, so its gradient should be 2 (catches = vs +=)
+    out->backward();
+    for (float g : table->get_grad()) std::cout << g << " ";   // expect 1 1 0 0 2 2 0 0
+    std::cout << std::endl;
+
+    // an id past the end of the table should throw
+    ids->get_data_ref() = {1, 4, 0};
+    try {
+        table->gather(ids);
+        std::cout << "range check: FAIL (no throw)" << std::endl;
+    } catch (const std::invalid_argument&) {
+        std::cout << "range check: PASS" << std::endl;
+    }
+
+    // numerical gradient check with a random weight so gradients aren't trivial
+    auto t2 = std::make_shared<Tensor>(std::vector<size_t>{4, 2});
+    t2->randomize();
+    t2->set_requires_grad(true);
+    auto ids2 = std::make_shared<Tensor>(std::vector<size_t>{1, 3});
+    ids2->get_data_ref() = {2, 0, 2};
+    auto w = std::make_shared<Tensor>(std::vector<size_t>{1, 3, 2});
+    w->randomize();   // constant, no grad
+    auto fwd = [&]() { return t2->gather(ids2)->multiply(w); };
+    std::cout << "gather grad: "
+              << (check_one_tensor(t2, fwd, 1e-2f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+}
+
+    {
+    std::cout << "Embedding" << std::endl;
+    Embedding emb(10, 6);
+    auto ids = std::make_shared<Tensor>(std::vector<size_t>{2, 4});
+    ids->get_data_ref() = {1, 3, 3, 0, 9, 2, 2, 2};
+    auto out = emb.forward(ids);
+    for (size_t s : out->get_shape()) std::cout << s << " "; 
+    std::cout << std::endl;
+    std::cout<<*out<<std::endl;
+    std::cout << *emb.parameters()[0];
+}
 }      
 
     // std::cout << "--------------Relu Autograd-------------" << std::endl;

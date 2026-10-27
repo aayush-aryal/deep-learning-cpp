@@ -4,6 +4,12 @@
 #include <memory>
 
 
+// key points
+    // multiheaded attention splits attention calculation so each head can attend to d/h features over all t tokens ?
+    // basically allows multiple single headed attention to occur quicker by batching attention mechanism 
+    // batching attention is just reshaping and making sure the features and token length are the ones that do attention from input that contins many features
+    // multiheaded attention allows various features such as token gap and other stuff to seperatly influence a token weight
+
 MultiHeadAttention::MultiHeadAttention(size_t d_model, size_t num_heads)
     :d_model_(d_model),
     num_heads_(num_heads),

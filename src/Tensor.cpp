@@ -18,6 +18,7 @@
 #include "autograd/ops/AxisSumBackward.hpp"
 #include "autograd/ops/PermuteBackward.hpp"
 #include "autograd/ops/ReshapeBackward.hpp"
+#include "autograd/ops/GatherBackward.hpp"
 #include <memory>
 #include <assert.h>
 #include <limits>
@@ -507,6 +508,46 @@ std::shared_ptr<Tensor> Tensor::reshape(const std::vector<int>& new_shape){
         result->set_requires_grad(true);
     }
     return result;
+}
+
+
+std::shared_ptr<Tensor> Tensor::gather(std::shared_ptr<Tensor> ids){
+    if (this->get_shape().size()!=2){
+        throw std::invalid_argument("input tensor must be of shape (V,D)");
+    }
+    size_t V= this->get_shape()[0];
+    size_t D= this->get_shape()[1];
+    //(V,D) V is number of rows, D is length of each row ie cols
+
+    std::vector<size_t> new_ids;
+    for (int i=0; i<ids->data_.size();i++){
+        if (ids->data_[i]<0){
+            throw std::invalid_argument("cannot have negative ids");
+        }
+        if (ids->data_[i]>=V){
+            throw std::invalid_argument("id out of range");
+        }
+        new_ids.push_back(static_cast<size_t>(ids->data_[i]));
+    }
+
+    std::vector<size_t> new_shape= ids->get_shape();
+    new_shape.push_back(D);
+
+    auto result= std::make_shared<Tensor>(new_shape);
+
+    for (size_t p=0; p<new_ids.size();p++){
+        for (size_t d=0; d<D;d++){
+            result->data_[p*D+d]=this->data_[new_ids[p]*D+d];
+        }
+    }
+    // wire up the backward node here
+    if (this->requires_grad_){
+        auto node= std::make_shared<GatherBackward>(this->shared_from_this(),result->grad_,new_ids,D);
+        result->grad_fn_=node;
+        result->requires_grad_=true;
+    }
+    return result;
+
 }
 
 

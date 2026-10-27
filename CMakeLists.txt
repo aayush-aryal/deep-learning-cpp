@@ -26,11 +26,14 @@ add_executable(run_engine
                 src/autograd/ops/AxisSumBackward.cpp
                 src/autograd/ops/PermuteBackward.cpp
                 src/autograd/ops/ReshapeBackward.cpp
+                src/autograd/ops/GatherBackward.cpp
                 src/SGD.cpp
                 src/nn/Linear.cpp
                 src/nn/Relu.cpp
                 src/nn/Sequential.cpp
                 src/nn/MultiHeadAttention.cpp
+                src/nn/LayerNorm.cpp
+                src/nn/Embedding.cpp
                 src/Dataloader.cpp
                 src/utility.cpp
                 src/capi.cpp
