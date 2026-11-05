@@ -34,6 +34,10 @@ add_executable(run_engine
                 src/nn/MultiHeadAttention.cpp
                 src/nn/LayerNorm.cpp
                 src/nn/Embedding.cpp
+                src/nn/PositionalEncoding.cpp
+                src/nn/FeedForwardBlock.cpp
+                src/nn/TransformerBlock.cpp
+                src/nn/TransformerLM.cpp
                 src/Dataloader.cpp
                 src/utility.cpp
                 src/capi.cpp

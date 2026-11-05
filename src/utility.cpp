@@ -118,9 +118,9 @@ float accuracy(std::shared_ptr<Tensor> input, std::shared_ptr<Tensor> target){
 // }
 
 bool check_one_tensor(std::shared_ptr<Tensor> target, std::function<std::shared_ptr<Tensor>()> forward_fn, float eps, float tolerance, float atol) {
+    target->zero_grad();
     auto result = forward_fn();
     result->backward();
-
     bool all_true = true;
     std::vector<float>& data = target->get_data_ref();
     for (int i = 0; i < data.size(); i++) {
@@ -236,4 +236,34 @@ size_t normalize_axis(int axis, size_t rank){
 
 
 
+std::shared_ptr<Tensor> cross_entropy(std::shared_ptr<Tensor>logits, std::shared_ptr<Tensor>target){
 
+    // axiswise normalize logits first
+    auto awm= logits->axiswise_max(-1);
+    // for numerical stability 
+    auto shifted= logits->subtract(awm);
+    auto e= shifted->exp();
+    auto s= e->axiswise_sum(-1);
+    auto lse= s->log();
+    auto log_probs= shifted->subtract(lse);
+
+    auto one_hot= std::make_shared<Tensor>(logits->get_shape());
+    size_t V= logits->get_shape().back();
+
+    if (target->get_data().size()*V != logits->get_data().size()) throw std::invalid_argument("out of bounds");
+
+    for (size_t i=0; i<target->get_data().size(); i++){
+        float t= target->get_data()[i];
+        
+        if (t < 0 || t >= static_cast<float>(V)) throw std::invalid_argument("cross_entropy: target out of range");
+        one_hot->get_data_ref()[i*V+static_cast<size_t>(t)]=1.0f;
+    }
+
+    auto picked= log_probs->multiply(one_hot)->axiswise_sum(-1);
+    auto n= target->get_data().size();
+    auto red= picked->reshape({1,-1})->axiswise_sum(-1);
+    auto scalar= std::make_shared<Tensor>(std::vector<size_t>{1,1});
+    scalar->set({0,0},-1.0f/static_cast<float>(n));
+    return red->multiply(scalar);
+
+}

@@ -9,6 +9,10 @@
 #include "nn/MultiHeadAttention.h"
 #include "nn/LayerNorm.h"
 #include "nn/Embedding.h"
+#include "nn/PositionalEncoding.h"
+#include "nn/FeedForwardBlock.h"
+#include "nn/TransformerBlock.h"
+#include "nn/TransformerLM.h"
 #include "vector"
 #include "Dataloader.h"
 #include "utility.h"
@@ -619,6 +623,174 @@ int main() {
     std::cout<<*out<<std::endl;
     std::cout << *emb.parameters()[0];
 }
+
+
+
+{
+    std::cout << "PositionalEncoding" << std::endl;
+    PositionalEncoding pe(3, 4);
+    auto x = std::make_shared<Tensor>(std::vector<size_t>{2, 3, 4}); 
+    auto out = pe.forward(x);
+    std::cout << *out;
+    std::cout << "params: " << pe.parameters().size() << " (expect 0)" << std::endl;
+}
+
+{
+    std::cout<<"FeedForward"<<std::endl;
+    const size_t B= 2 , T=4, D=6;
+    FeedForwardBlock ff(D,24);
+    auto x= std::make_shared<Tensor>(std::vector<size_t>{B,T,D});
+    x->randomize();
+    x->set_requires_grad(true);
+
+    auto out = ff.forward(x);
+    for (size_t s : out->get_shape()) std::cout << s << " ";   // expect 2 4 6
+    std::cout << "| params: " << ff.parameters().size() << " (expect 4)" << std::endl;
+    auto w = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+    w->randomize();   // constant, no grad
+    auto fwd = [&]() { return ff.forward(x)->multiply(w); };
+    std::cout << "grad x: " << (check_one_tensor(x, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+    for (size_t i = 0; i < 4; i++) {
+        auto target = ff.parameters()[i];
+        std::cout << "grad param " << i << ": "
+                  << (check_one_tensor(target, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+    }
+
+
+}
+
+{
+    std::cout << "TransformerBlock" << std::endl;
+    const size_t B = 2, T = 4, D = 6;
+
+    auto make_x = [&]() {
+        auto x = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+        x->randomize();
+        x->set_requires_grad(true);
+        return x;
+    };
+    auto w = std::make_shared<Tensor>(std::vector<size_t>{B, T, D});
+    w->randomize();   // constant, no grad
+
+    // shape and parameter count
+    {
+        TransformerBlock blk(D, 2, 24);
+        auto out = blk.forward(make_x());
+        for (size_t s : out->get_shape()) std::cout << s << " ";
+        std::cout << "| params: " << blk.parameters().size() << " (expect 2 4 6 | 16)" << std::endl;
+    }
+
+    // residual sanity: zero the output projections and the block should return x exactly
+    {
+        TransformerBlock blk(D, 2, 24);
+        auto p = blk.parameters();   // ln1(2), mha(8), ln2(2), ffn(4)
+        for (size_t i : {8, 9, 14, 15})   // mha Wo,bo and ffn W2,b2
+            std::fill(p[i]->get_data_ref().begin(), p[i]->get_data_ref().end(), 0.0f);
+        auto x = make_x();
+        auto out = blk.forward(x);
+        std::cout << "residual: " << (out->get_data() == x->get_data() ? "PASS" : "FAIL") << std::endl;
+    }
+
+    // causal no-leak: change the last token, earlier outputs must not move
+    {
+        TransformerBlock blk(D, 2, 24);
+        auto x = make_x();
+        std::vector<float> before = blk.forward(x)->get_data();
+        for (size_t b = 0; b < B; b++)
+            for (size_t d = 0; d < D; d++)
+                x->get_data_ref()[b * T * D + (T - 1) * D + d] += 5.0f;
+        auto after = blk.forward(x)->get_data();
+        float early = 0.0f;
+        for (size_t b = 0; b < B; b++)
+            for (size_t t = 0; t < T - 1; t++)
+                for (size_t d = 0; d < D; d++) {
+                    size_t i = b * T * D + t * D + d;
+                    early = std::max(early, std::abs(before[i] - after[i]));
+                }
+        std::cout << "no-leak: " << (early < 1e-6f ? "PASS" : "FAIL") << std::endl;
+    }
+
+    // gradient check on x and on a few parameters (fresh block each time)
+    {
+        TransformerBlock blk(D, 2, 24);
+        auto x = make_x();
+        auto fwd = [&]() { return blk.forward(x)->multiply(w); };
+        std::cout << "grad x: " << (check_one_tensor(x, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+    }
+    const char* names[3] = {"ln1 gamma", "mha Wq", "ffn W1"};
+    const size_t idx[3] = {0, 2, 12};
+    for (int k = 0; k < 3; k++) {
+        TransformerBlock blk(D, 2, 24);
+        auto x = make_x();
+        auto fwd = [&]() { return blk.forward(x)->multiply(w); };
+        std::cout << "grad " << names[k] << ": "
+                  << (check_one_tensor(blk.parameters()[idx[k]], fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+    }
+}
+
+{
+    std::cout << "TransformerLM" << std::endl;
+    const size_t V = 10, D = 8, H = 2, FF = 32, N = 2, T = 4;
+    TransformerLM lm(V, D, H, FF, N, T);
+
+    auto ids = std::make_shared<Tensor>(std::vector<size_t>{2, T});
+    ids->get_data_ref() = {1, 3, 3, 0, 9, 2, 2, 2};
+    auto logits = lm.forward(ids);
+    for (size_t s : logits->get_shape()) std::cout << s << " ";   // expect 2 4 10
+    std::cout << "| params: " << lm.parameters().size() << " (expect 37)" << std::endl;
+
+    // causal no-leak: change the last token of each sequence
+    std::vector<float> before = logits->get_data();
+    ids->get_data_ref() = {1, 3, 3, 5, 9, 2, 2, 7};
+    auto after = lm.forward(ids)->get_data();
+    float early = 0.0f;
+    for (size_t b = 0; b < 2; b++)
+        for (size_t t = 0; t < T - 1; t++)
+            for (size_t v = 0; v < V; v++) {
+                size_t i = (b * T + t) * V + v;
+                early = std::max(early, std::abs(before[i] - after[i]));
+            }
+    std::cout << "no-leak: " << (early < 1e-6f ? "PASS" : "FAIL") << std::endl;
+}
+
+{
+    std::cout << "CrossEntropy" << std::endl;
+
+    // all-zero logits, V=4: uniform probs, loss should be ln(4) = 1.3863
+    auto z = std::make_shared<Tensor>(std::vector<size_t>{1, 1, 4});
+    auto t = std::make_shared<Tensor>(std::vector<size_t>{1, 1});
+    t->get_data_ref() = {2};
+    auto loss = cross_entropy(z, t);
+    std::cout << "shape: ";
+    for (size_t s : loss->get_shape()) std::cout << s << " ";   // expect 1 1
+    std::cout << "| uniform loss: " << loss->get_data()[0] << " (expect 1.3863)" << std::endl;
+
+    // hand case: logits [2.0, 1.0, 0.1, 0.5], target 0, loss should be about 0.555
+    auto z2 = std::make_shared<Tensor>(std::vector<size_t>{1, 1, 4});
+    z2->get_data_ref() = {2.0f, 1.0f, 0.1f, 0.5f};
+    auto t2 = std::make_shared<Tensor>(std::vector<size_t>{1, 1});
+    t2->get_data_ref() = {0};
+    std::cout << "hand case: " << cross_entropy(z2, t2)->get_data()[0] << " (expect ~0.555)" << std::endl;
+
+    // an out-of-range target should throw
+    t2->get_data_ref() = {7};
+    try {
+        cross_entropy(z2, t2);
+        std::cout << "range check: FAIL (no throw)" << std::endl;
+    } catch (const std::invalid_argument&) {
+        std::cout << "range check: PASS" << std::endl;
+    }
+
+    // gradient check on random logits with fixed targets (loss is already a scalar)
+    auto zr = std::make_shared<Tensor>(std::vector<size_t>{2, 3, 5});
+    zr->randomize();
+    zr->set_requires_grad(true);
+    auto tr = std::make_shared<Tensor>(std::vector<size_t>{2, 3});
+    tr->get_data_ref() = {0, 4, 2, 1, 3, 3};
+    auto fwd = [&]() { return cross_entropy(zr, tr); };
+    std::cout << "grad logits: " << (check_one_tensor(zr, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
+}
+
 }      
 
     // std::cout << "--------------Relu Autograd-------------" << std::endl;
