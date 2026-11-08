@@ -13,8 +13,11 @@
 #include "nn/FeedForwardBlock.h"
 #include "nn/TransformerBlock.h"
 #include "nn/TransformerLM.h"
+#include "Adam.h"
+#include "Tokenizer.h"
 #include "vector"
 #include "Dataloader.h"
+#include "TextDataset.h"
 #include "utility.h"
 
 int main() {
@@ -790,6 +793,91 @@ int main() {
     auto fwd = [&]() { return cross_entropy(zr, tr); };
     std::cout << "grad logits: " << (check_one_tensor(zr, fwd, 1e-3f, 2e-2f) ? "PASS" : "FAIL") << std::endl;
 }
+
+{
+    std::cout << "Adam" << std::endl;
+
+    // minimize (w - 3)^2 starting from w = 0; w should converge to 3
+    auto w = std::make_shared<Tensor>(std::vector<size_t>{1, 1});
+    w->get_data_ref()[0] = 0.0f;
+    w->set_requires_grad(true);
+
+    auto c = std::make_shared<Tensor>(std::vector<size_t>{1, 1});
+    c->get_data_ref()[0] = 3.0f;   // constant target, no grad
+
+    Adam opt({w}, 0.1f);
+
+    for (int step = 0; step <= 200; step++) {
+        auto d = w->subtract(c);
+        auto loss = d->multiply(d);          // (w - 3)^2
+        loss->backward();
+        opt.step();
+        opt.zero_grad();
+
+        if (step % 50 == 0)
+            std::cout << "step " << step << "  w = " << w->get_data()[0]
+                      << "  loss = " << loss->get_data()[0] << std::endl;
+    }
+    float final_w = w->get_data()[0];
+    std::cout << "adam: " << (std::abs(final_w - 3.0f) < 0.05f ? "PASS" : "FAIL")
+              << " (w = " << final_w << ", expect ~3)" << std::endl;
+}
+
+{
+    std::cout << "Tokenizer" << std::endl;
+    Tokenizer tok("hello world");
+    std::cout << "vocab: " << tok.vocab_size() << " (expect 8)" << std::endl;
+    auto ids = tok.encode("hello");
+    for (int id : ids) std::cout << id << " ";
+    std::cout << "\nround trip: " << (tok.decode(ids) == "hello" ? "PASS" : "FAIL") << std::endl;
+}
+
+{
+    // testong the tokenizer now
+    std::string text = read_file("input.txt");
+std::cout << text.size() << std::endl;         
+std::cout << text.substr(0, 200) << std::endl;  
+Tokenizer tok(text);
+std::cout << "vocab: " << tok.vocab_size() << std::endl;   // about 65
+
+}
+{
+    TextDataset data(read_file("input.txt"));
+auto [x, y] = data.get_batch(2, 8, true);
+const auto& tok = data.tokenizer();
+for (size_t b = 0; b < 2; b++) {
+    std::vector<int> xi, yi;
+    for (size_t t = 0; t < 8; t++) {
+        xi.push_back((int)x->get_data()[b*8+t]);
+        yi.push_back((int)y->get_data()[b*8+t]);
+    }
+    std::cout << "x: " << tok.decode(xi) << "\ny: " << tok.decode(yi) << "\n";
+}
+}
+
+{
+    std::cout<< "Training loop" << std::endl;
+    TextDataset data(read_file("input.txt"));
+    const auto& tok = data.tokenizer();
+    TransformerLM model(tok.vocab_size(),32,2,128,2,32);
+    Adam opt(model.parameters());
+    size_t B= 16;
+    size_t T=32;
+    auto start = std::chrono::steady_clock::now();
+    for (size_t i=0 ; i<20; i++){
+        auto [x,y]= data.get_batch(B,T,true);
+        auto logits= model.forward(x);
+        auto loss= cross_entropy(logits,y);
+        loss->backward();
+        opt.step();
+        opt.zero_grad();
+        std::cout << "step " << i << "  loss " << loss->get_data()[0] << std::endl;
+    }
+     double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    std::cout << secs / 20 << " s/step" << std::endl;
+
+}
+
 
 }      
 

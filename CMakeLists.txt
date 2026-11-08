@@ -38,7 +38,10 @@ add_executable(run_engine
                 src/nn/FeedForwardBlock.cpp
                 src/nn/TransformerBlock.cpp
                 src/nn/TransformerLM.cpp
+                src/Adam.cpp
                 src/Dataloader.cpp
+                src/Tokenizer.cpp
+                src/TextDataset.cpp
                 src/utility.cpp
                 src/capi.cpp
                 )

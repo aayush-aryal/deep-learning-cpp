@@ -1,6 +1,10 @@
 #include <memory>
 #include "Tensor.h"
 #include "utility.h"
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <stdexcept>
 
 bool increment_index(std::vector<size_t>& idx, const std::vector<size_t>& shape);
 size_t get_correct_index(std::vector<size_t> index, std::vector<size_t> strides);
@@ -266,4 +270,16 @@ std::shared_ptr<Tensor> cross_entropy(std::shared_ptr<Tensor>logits, std::shared
     scalar->set({0,0},-1.0f/static_cast<float>(n));
     return red->multiply(scalar);
 
+}
+
+
+std::string read_file(const std::string& path){
+    std::ifstream file(path);
+    if (!file.is_open()){
+        throw std::runtime_error("read_file: could not open " + path);
+    }
+
+    std::stringstream buffer;
+    buffer<<file.rdbuf();
+    return buffer.str();
 }

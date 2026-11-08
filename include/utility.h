@@ -19,3 +19,4 @@ size_t normalize_axis(int axis, size_t rank);
 std::shared_ptr<Tensor> attention(std::shared_ptr<Tensor> Q, std::shared_ptr<Tensor> K, std::shared_ptr<Tensor> V,bool causal=false);
 std::shared_ptr<Tensor> causal_mask(size_t T);
 std::shared_ptr<Tensor> cross_entropy(std::shared_ptr<Tensor>logits, std::shared_ptr<Tensor>target);
+std::string read_file(const std::string& path);
